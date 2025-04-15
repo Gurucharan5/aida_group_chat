@@ -18,7 +18,11 @@ interface AuthContextProps {
   loginAsGuest: (name: string) => Promise<void>;
   logout: () => Promise<void>;
   loading: boolean;
-  signupWithEmail: (email: string, password: string) => Promise<void>;
+  signupWithEmail: (
+    email: string,
+    password: string,
+    username: string
+  ) => Promise<void>;
   loginWithEmail: (email: string, password: string) => Promise<void>;
   checkEmailVerified: () => Promise<boolean>;
 }
@@ -30,7 +34,9 @@ const AuthContext = createContext<AuthContextProps>({
   loading: true,
   signupWithEmail: async () => {},
   loginWithEmail: async () => {},
-  checkEmailVerified: async () => { return false; },
+  checkEmailVerified: async () => {
+    return false;
+  },
 });
 
 export const useAuth = () => useContext(AuthContext);
@@ -63,14 +69,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   //     }
   //     setLoading(false);
   //   });
-  
+
   //   return () => unsubscribe(); // clean up
   // }, []);
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
         const name = firebaseUser.displayName || firebaseUser.email || null;
-  
+
         // Only allow verified email users to continue
         if (firebaseUser.email && !firebaseUser.emailVerified) {
           // console.log("Email not verified yet");
@@ -78,7 +84,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           setLoading(false);
           return;
         }
-  
+
         await AsyncStorage.setItem("guestName", name || "");
         setUser(name);
       } else {
@@ -86,20 +92,20 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       }
       setLoading(false);
     });
-  
+
     return () => unsubscribe();
   }, []);
-  
+
   const loginAsGuest = async (name: string) => {
     const credential = await signInAnonymously(auth);
     await updateProfile(credential.user, { displayName: name });
     await AsyncStorage.setItem("guestName", name);
     setUser(name);
   };
-  const signupWithEmail = async (email: any, password: any) => {
+  const signupWithEmail = async (email: any, password: any, username: any) => {
     const result = await createUserWithEmailAndPassword(auth, email, password);
     await sendEmailVerification(result.user);
-    await updateProfile(result.user, { displayName: email });
+    await updateProfile(result.user, { displayName: username });
     setUser(null); // Prevent login until verified
 
     // Redirect to verify-email screen
@@ -110,7 +116,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const loginWithEmail = async (email: any, password: any) => {
     const result = await signInWithEmailAndPassword(auth, email, password);
     await AsyncStorage.setItem("guestName", email);
-    await updateProfile(result.user, { displayName: email });
+    console.log("User logged in:", result.user);
+    console.log(result.user.displayName, "-------------------");
+    const displayName = result.user.displayName || email;
+    await updateProfile(result.user, { displayName: displayName });
     // console.log("User logged in:", result.user);
     setUser(email);
     // setUser(result.user);

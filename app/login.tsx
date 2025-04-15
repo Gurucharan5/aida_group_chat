@@ -8,6 +8,8 @@ import { ScrollView } from "react-native";
 const LoginScreen: React.FC = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [username, setUsername] = useState("");
+  const [isSignupMode, setIsSignupMode] = useState(false);
   const [isGuestLogin, setIsGuestLogin] = useState(false);
   const [name, setName] = useState("");
   const [showDisclaimer, setShowDisclaimer] = useState(false);
@@ -39,14 +41,21 @@ const LoginScreen: React.FC = () => {
     }
   };
   const handleEmailSignup = async () => {
+    if (!email.trim() || !password.trim() || !username.trim()) {
+      return Alert.alert("Please fill in all fields");
+    }
+
     try {
-      await signupWithEmail(email, password);
+      await signupWithEmail(email, password,username);
     } catch (err) {
       Alert.alert("Signup error", (err as Error).message);
     }
   };
 
   const handleEmailLogin = async () => {
+    if (!email.trim() || !password.trim()) {
+      return Alert.alert("Please enter email and password");
+    }
     try {
       await loginWithEmail(email, password);
     } catch (err) {
@@ -56,10 +65,57 @@ const LoginScreen: React.FC = () => {
   return (
     <View style={styles.container}>
       <Text style={styles.title}>
-        {isGuestLogin ? "Guest Login" : "Email Login/Signup"}
+        {isGuestLogin ? "Guest Login" : isSignupMode ? "Email Sign Up" : "Email Login"}
       </Text>
 
-      {isGuestLogin && (
+      {isGuestLogin ? (
+        <View>
+          <TextInput
+            value={name}
+            onChangeText={setName}
+            placeholder="Your name"
+            style={styles.input}
+          />
+          <Button title="Continue as Guest" onPress={handleLogin} />
+        </View>
+      ) : (
+        <>
+          {isSignupMode && (
+            <TextInput
+              value={username}
+              onChangeText={setUsername}
+              placeholder="Username"
+              style={styles.input}
+            />
+          )}
+          <TextInput
+            value={email}
+            onChangeText={setEmail}
+            placeholder="Email"
+            style={styles.input}
+          />
+          <TextInput
+            value={password}
+            onChangeText={setPassword}
+            placeholder="Password"
+            style={styles.input}
+            secureTextEntry
+          />
+          {isSignupMode ? (
+            <Button title="Sign Up" onPress={handleEmailSignup} />
+          ) : (
+            <Button title="Login" onPress={handleEmailLogin} />
+          )}
+          <Text
+            style={styles.switchLink}
+            onPress={() => setIsSignupMode(!isSignupMode)}
+          >
+            {isSignupMode ? "Switch to Login" : "Don't have an account? Sign Up"}
+          </Text>
+        </>
+      )}
+
+      {/* {isGuestLogin && (
         <View>
           <Text style={styles.title}>Enter Your Name</Text>
           <TextInput
@@ -96,10 +152,13 @@ const LoginScreen: React.FC = () => {
           <Button title="Login" onPress={handleEmailLogin} />
           <Button title="Sign Up" onPress={handleEmailSignup} />
         </>
-      )}
+      )} */}
       <Text
         style={styles.switchLink}
-        onPress={() => setIsGuestLogin(!isGuestLogin)}
+        onPress={() => {
+          setIsGuestLogin(!isGuestLogin)
+          setIsSignupMode(false);
+        }}
       >
         {isGuestLogin ? "Switch to Email Login" : "Switch to Guest Login"}
       </Text>
