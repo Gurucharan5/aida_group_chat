@@ -37,8 +37,6 @@ yarn-error.*
 
 app-example
 
-# google services
-google-services.json
 
-#firebase 
-firebaseConfig.json
+
+

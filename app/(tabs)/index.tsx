@@ -261,9 +261,11 @@ import {
 import { db, auth } from "../../firebaseConfig";
 import { useRootNavigationState, useRouter } from "expo-router";
 import { useAuth } from "@/context/AuthContext";
+// import { usePushNotifications } from "@/utils/notifications";
 
 const HomeScreen = () => {
   const currentUserId = auth.currentUser?.uid;
+  // usePushNotifications();
 
   const [groups, setGroups] = useState<
     { id: string; name: string; isPublic: boolean; createdBy: string }[]

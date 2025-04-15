@@ -28,6 +28,7 @@ import { View, Text, Button, StyleSheet, TouchableOpacity } from "react-native";
 import React, { useEffect } from "react";
 import { useRouter } from "expo-router";
 import { useAuth } from "@/context/AuthContext";
+import PushNotification from "../PushNotification";
 
 const Explore = () => {
   const { user, logout } = useAuth();
@@ -57,6 +58,7 @@ const Explore = () => {
           to manage user content and activity. By using this app, you agree to our Terms and Policies.
         </Text>
       </View>
+      
 
       <TouchableOpacity style={styles.logoutButton} onPress={logout}>
         <Text style={styles.logoutText}>Logout</Text>

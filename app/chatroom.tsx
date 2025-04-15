@@ -22,8 +22,12 @@ import {
   doc,
   setDoc,
   getDoc,
+  getDocs,
+  limit,
+  startAfter,
 } from "firebase/firestore";
 import { auth, db } from "../firebaseConfig";
+import { sendPushNotification } from "@/helpers/SendNotification";
 
 interface Message {
   id: string;
@@ -45,28 +49,21 @@ export default function ChatRoom() {
   const currentUserId = auth.currentUser?.uid;
   const isAdmin = currentUserId === createdBy;
   const [messages, setMessages] = useState<Message[]>([]);
+  const PAGE_SIZE = 20;
   const [newMessage, setNewMessage] = useState("");
   const flatListRef = useRef<FlatList>(null);
-  const [joinRequests, setJoinRequests] = useState<{ userId: string }[]>([]);
 
   useEffect(() => {
-    if (!isAdmin || !groupId) return;
-
-    const q = collection(db, `groups/${groupId}/joinRequests`);
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const requests = snapshot.docs.map((doc) => ({
-        userId: doc.data().userId,
-      }));
-      setJoinRequests(requests);
-    });
-
-    return unsubscribe;
-  }, [isAdmin, groupId]);
+    if (flatListRef.current && messages.length > 0) {
+      flatListRef.current.scrollToEnd({ animated: true });
+    }
+  }, [messages]);
 
   useEffect(() => {
     const q = query(
       collection(db, "groups", groupId, "messages"),
-      orderBy("createdAt", "asc")
+      orderBy("createdAt", "desc"),
+      limit(PAGE_SIZE)
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -74,7 +71,7 @@ export default function ChatRoom() {
         id: doc.id,
         ...(doc.data() as Omit<Message, "id">),
       }));
-      setMessages(msgs);
+      setMessages(msgs.reverse());
 
       // Auto-scroll to bottom
       setTimeout(() => {
@@ -85,66 +82,100 @@ export default function ChatRoom() {
     return unsubscribe;
   }, [groupId]);
 
-  useEffect(() => {
-    const membersRef = collection(db, `groups/${groupId}/members`);
-    const unsubscribe = onSnapshot(
-      membersRef,
-      (snapshot) => {
-        const formattedMembers = snapshot.docs.map((doc) => ({
-          userId: doc.id,
-          ...doc.data(),
-        }));
-        setMembers(formattedMembers);
-      },
-      (error) => {
-        console.error("Error fetching group members:", error);
-      }
-    );
-
-    return () => unsubscribe();
-  }, [groupId]);
-  const [members, setMembers] = useState<{ userId: string }[]>([]);
   const [isAppAdmin, setIsAppAdmin] = useState(false);
   useEffect(() => {
-      const fetchAdminStatus = async () => {
-        const isAdmin = await checkIfUserIsAdmin();
-        // console.log("Is Admin:", isAdmin);
-        setIsAppAdmin(isAdmin);
-        // Do something with the result (e.g., set state)
-      };
-  
-      fetchAdminStatus();
-    }, []);
+    const fetchAdminStatus = async () => {
+      const isAdmin = await checkIfUserIsAdmin();
+      // console.log("Is Admin:", isAdmin);
+      setIsAppAdmin(isAdmin);
+      // Do something with the result (e.g., set state)
+    };
+
+    fetchAdminStatus();
+  }, []);
+
   const checkIfUserIsAdmin = async () => {
-      const uid = auth.currentUser?.uid;
-      if (!uid) return false;
-  
-      try {
-        const userRef = doc(db, "users", uid);
-        const userSnap = await getDoc(userRef);
-  
-        if (userSnap.exists()) {
-          const data = userSnap.data();
-          return data.isAdmin === true;
-        } else {
-          // console.log("User document not found");
-          return false;
-        }
-      } catch (error) {
-        console.error("Error checking admin status:", error);
+    const uid = auth.currentUser?.uid;
+    if (!uid) return false;
+
+    try {
+      const userRef = doc(db, "users", uid);
+      const userSnap = await getDoc(userRef);
+
+      if (userSnap.exists()) {
+        const data = userSnap.data();
+        return data.isAdmin === true;
+      } else {
+        // console.log("User document not found");
         return false;
       }
-    };
+    } catch (error) {
+      console.error("Error checking admin status:", error);
+      return false;
+    }
+  };
   const sendMessage = async () => {
     if (!newMessage.trim()) return;
-
+    const senderId = auth.currentUser?.uid;
+    const senderName = auth.currentUser?.displayName || "Guest";
     await addDoc(collection(db, "groups", groupId, "messages"), {
       text: newMessage.trim(),
       sender: auth.currentUser?.displayName || "Guest",
       createdAt: Timestamp.now(),
     });
-
     setNewMessage("");
+    // Check if the group is public
+    try {
+      const groupDocSnap = await getDoc(doc(db, "groups", groupId));
+      if (!groupDocSnap.exists()) {
+        console.error("Group not found");
+        return;
+      }
+
+      const groupData = groupDocSnap.data();
+      const isPublic = groupData.isPublic;
+
+      let tokens: string[] = [];
+
+      if (isPublic) {
+        // Fetch all users for public group
+        const usersSnap = await getDocs(collection(db, "users"));
+        tokens = usersSnap.docs
+          .filter(
+            (docSnap) => docSnap.id !== senderId && docSnap.data().expoPushToken
+          )
+          .map((docSnap) => docSnap.data().expoPushToken as string);
+      } else {
+        // Fetch only group members for private group
+        const membersSnap = await getDocs(collection(db, `groups/${groupId}/members`));
+        const memberIds = membersSnap.docs.map((doc) => doc.id);
+        const memberDocs = await Promise.all(
+          memberIds.map((userId) => getDoc(doc(db, "users", userId)))
+        );
+
+        tokens = memberDocs
+          .filter(
+            (docSnap) =>
+              docSnap.exists() &&
+              docSnap.id !== senderId && docSnap.data().expoPushToken
+          )
+          .map((docSnap) => docSnap.data()!.expoPushToken as string);
+      }
+      // console.log("Tokens to send notifications:", tokens);
+      // console.log(groupData, "--------gtoip");
+      // Send notifications
+      await Promise.all(
+        tokens.map((token) =>
+          sendPushNotification(
+            token,
+            groupData.name || "Group",
+            `${senderName}: ${newMessage.trim()}`
+          )
+        )
+      );
+    } catch (e) {
+      console.error("Failed to send notifications:", e);
+    }
   };
   const handleReport = async (message: Message) => {
     try {
@@ -164,8 +195,6 @@ export default function ChatRoom() {
     }
   };
 
-  
-
   return (
     <KeyboardAvoidingView
       behavior={Platform.select({ ios: "padding", android: undefined })}
@@ -173,9 +202,8 @@ export default function ChatRoom() {
       keyboardVerticalOffset={100}
     >
       <Text style={styles.header}>{groupName}</Text>
-      {
-        isAppAdmin && (
-          <View style={{ padding: 10 }}>
+      {isAppAdmin && (
+        <View style={{ padding: 10 }}>
           <Button
             title="Manage Group"
             onPress={() =>
@@ -186,9 +214,8 @@ export default function ChatRoom() {
             }
           />
         </View>
-        )
-      }
-      
+      )}
+
       {isAdmin && (
         <View style={{ padding: 10 }}>
           <Button
