@@ -17,7 +17,7 @@ export const sendPushNotification = async (expoToken: string | null, title: stri
           Accept: "application/json",
         },
       });
-      console.log("Notification sent successfully!");
+      // console.log("Notification sent successfully!");
     } catch (error) {
       console.error("Error sending notification:", error);
     }

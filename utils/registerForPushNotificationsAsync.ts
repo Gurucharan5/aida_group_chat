@@ -4,6 +4,7 @@ import Constants from "expo-constants";
 import { Platform } from "react-native";
 import { getAuth } from "firebase/auth";
 import { doc, getFirestore, setDoc } from "firebase/firestore";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export async function registerForPushNotificationsAsync() {
   if (Platform.OS === "android") {
@@ -40,11 +41,12 @@ export async function registerForPushNotificationsAsync() {
           projectId,
         })
       ).data;
-      console.log(pushTokenString);
+      // console.log(pushTokenString);
+      await AsyncStorage.setItem("expoPushToken", pushTokenString);
       // ✅ Store it in Firestore under the current user
       const auth = getAuth();
       const user = auth.currentUser;
-      console.log("User ID: ", user?.uid);
+      // console.log("User ID: ", user?.uid);
       if (user?.uid) {
         const db = getFirestore();
         await setDoc(
@@ -52,7 +54,7 @@ export async function registerForPushNotificationsAsync() {
           { expoPushToken: pushTokenString },
           { merge: true } // this will keep existing data and only update token
         );
-        console.log("Push token stored in Firestore");
+        // console.log("Push token stored in Firestore");
       }
       return pushTokenString;
     } catch (e: unknown) {

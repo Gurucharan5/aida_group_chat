@@ -1,241 +1,3 @@
-// import React, { useEffect, useState } from "react";
-// import {
-//   View,
-//   Text,
-//   Button,
-//   FlatList,
-//   TextInput,
-//   Alert,
-//   StyleSheet,
-//   TouchableOpacity,
-//   Switch,
-// } from "react-native";
-// import {
-//   collection,
-//   addDoc,
-//   onSnapshot,
-//   query,
-//   orderBy,
-//   setDoc,
-//   doc,
-//   getDoc,
-// } from "firebase/firestore";
-// import { db, auth } from "../../firebaseConfig";
-// import { useRootNavigationState, useRouter } from "expo-router";
-// import { useAuth } from "@/context/AuthContext";
-
-// const HomeScreen = () => {
-//   const [groups, setGroups] = useState<
-//     { id: string; name: string; isPublic: boolean; createdBy: string }[]
-//   >([]);
-//   const [newGroupName, setNewGroupName] = useState("");
-//   const [isPublic, setIsPublic] = useState(true); // Default to public
-
-//   const router = useRouter();
-//   // inside component
-//   const { user, logout } = useAuth();
-//   const navigationState = useRootNavigationState(); // ✅
-
-//   useEffect(() => {
-//     if (!navigationState?.key) return;
-//     if (!user) {
-//       router.replace("/login");
-//     }
-//   }, [user, navigationState]);
-
-//   useEffect(() => {
-//     const q = query(collection(db, "groups"), orderBy("createdAt", "desc"));
-//     const unsubscribe = onSnapshot(q, (snapshot) => {
-//       const list = snapshot.docs.map((doc) => ({
-//         id: doc.id,
-//         name: doc.data().name,
-//         isPublic: doc.data().isPublic, // ✅ fetch isPublic
-//         createdBy: doc.data().createdBy, // ✅ fetch createdBy
-//       }));
-//       setGroups(list);
-//     });
-
-//     return unsubscribe;
-//   }, []);
-//   const joinPublicGroup = (groupId: string, groupName: string) => {
-//     router.push({
-//       pathname: "/chatroom",
-//       params: { id: groupId, name: groupName },
-//     });
-//   };
-//   const requestToJoinPrivateGroup = async (groupId: string) => {
-//     const userId = auth.currentUser?.uid;
-//     if (!userId) return;
-
-//     try {
-//       const requestRef = doc(db, `groups/${groupId}/joinRequests`, userId);
-//       await setDoc(requestRef, {
-//         userId,
-//         requestedAt: new Date(),
-//       });
-
-//       Alert.alert("Join request sent. Please wait for admin approval.");
-//     } catch (error) {
-//       Alert.alert("Error", (error as Error).message);
-//     }
-//   };
-//   const handleCreateGroup = async () => {
-//     if (!newGroupName.trim()) {
-//       Alert.alert("Please enter a group name");
-//       return;
-//     }
-//     console.log(auth.currentUser?.uid, "=============================");
-
-//     try {
-//       await addDoc(collection(db, "groups"), {
-//         name: newGroupName,
-//         createdAt: new Date(),
-//         createdBy: auth.currentUser?.uid,
-//         adminId: auth.currentUser?.uid, // ✅ Admin ID
-//         isPublic, // default to public, can be updated later
-//         blockedUsers: [], // array of user UIDs blocked from this group
-//         members: [auth.currentUser?.uid], // array of user UIDs who are members of this group
-//       });
-//       setNewGroupName("");
-//     } catch (error) {
-//       Alert.alert("Error creating group", (error as Error).message);
-//     }
-//   };
-
-//   const goToChat = async (groupId: string, groupName: string) => {
-//     // Add createdBy in the group data during fetch
-//     const selectedGroup = groups.find((g) => g.id === groupId);
-//     const groupRef = doc(db, "groups", groupId);
-//     const groupSnap = await getDoc(groupRef);
-
-//     if (!groupSnap.exists()) {
-//       Alert.alert("Group not found");
-//       return;
-//     }
-
-//     const groupData = groupSnap.data();
-//     console.log("Group Data:", groupData);
-//     const currentUserId = auth.currentUser?.uid;
-//     // Check if user is admin
-//     const isAdmin = groupData.createdBy === currentUserId;
-
-//     const memberDocRef = doc(
-//       db,
-//       `groups/${groupId}/members`,
-//       currentUserId || ""
-//     );
-//     const memberSnap = await getDoc(memberDocRef);
-
-//     if (
-//       !groupData.isPublic &&
-//       !memberSnap.exists() &&
-//       !isAdmin &&
-//       !groupData.blockedUsers?.includes(currentUserId)
-//     ) {
-//       // Check if user is already a member{
-//       Alert.alert(
-//         "Join request pending",
-//         "You must be approved by the group admin to join this private group."
-//       );
-//       return;
-//     }
-
-//     if (groupData.blockedUsers?.includes(currentUserId)) {
-//       Alert.alert("Access Denied", "You have been blocked from this group.");
-//       return;
-//     }
-//     router.push({
-//       pathname: "/chatroom",
-//       params: {
-//         id: groupId,
-//         name: groupName,
-//         createdBy: selectedGroup?.createdBy,
-//       },
-//     });
-//   };
-
-//   return (
-//     <View style={styles.container}>
-//       <Text style={styles.title}>Create a Group</Text>
-
-//       <TextInput
-//         value={newGroupName}
-//         onChangeText={setNewGroupName}
-//         placeholder="Enter group name"
-//         style={styles.input}
-//       />
-//       <View style={styles.switchContainer}>
-//         <Text style={styles.switchLabel}>Is this group Public?</Text>
-//         <Switch
-//           value={isPublic}
-//           onValueChange={setIsPublic} // Toggle the value
-//         />
-//       </View>
-//       <Button title="Create Group" onPress={handleCreateGroup} />
-
-//       <Text style={styles.title}>Your Groups</Text>
-
-//       <FlatList
-//         data={groups}
-//         keyExtractor={(item) => item.id}
-//         renderItem={({ item }) => (
-//           <TouchableOpacity
-//             onPress={() => goToChat(item.id, item.name)}
-//             style={styles.groupItem}
-//           >
-//             <Text style={styles.groupText}>{item.name}</Text>
-//             <Text style={styles.groupText}>
-//               {item.name} ({item.isPublic ? "Public" : "Private"})
-//             </Text>
-//             {item.isPublic ? (
-//               <Button
-//                 title="Join Group"
-//                 onPress={() => joinPublicGroup(item.id, item.name)}
-//               />
-//             ) : (
-//               <Button
-//                 title="Request to Join"
-//                 onPress={() => requestToJoinPrivateGroup(item.id)}
-//               />
-//             )}
-//           </TouchableOpacity>
-//         )}
-//       />
-//     </View>
-//   );
-// };
-
-// export default HomeScreen;
-
-// const styles = StyleSheet.create({
-//   container: { flex: 1, padding: 20, backgroundColor: "#fff" },
-//   title: { fontSize: 20, fontWeight: "bold", marginTop: 20 },
-//   input: {
-//     borderWidth: 1,
-//     borderColor: "#ccc",
-//     borderRadius: 8,
-//     padding: 10,
-//     marginVertical: 10,
-//   },
-//   groupItem: {
-//     padding: 15,
-//     backgroundColor: "#f0f0f0",
-//     marginVertical: 5,
-//     borderRadius: 8,
-//   },
-//   groupText: {
-//     fontSize: 16,
-//   },
-//   switchContainer: {
-//     flexDirection: "row",
-//     alignItems: "center",
-//     marginVertical: 10,
-//   },
-//   switchLabel: {
-//     fontSize: 16,
-//     marginRight: 10,
-//   },
-// });
 import React, { useEffect, useState } from "react";
 import {
   View,
@@ -247,6 +9,8 @@ import {
   StyleSheet,
   TouchableOpacity,
   Switch,
+  Modal,
+  ActivityIndicator,
 } from "react-native";
 import {
   collection,
@@ -258,9 +22,14 @@ import {
   doc,
   getDoc,
 } from "firebase/firestore";
+import { StatusBar } from "expo-status-bar";
 import { db, auth } from "../../firebaseConfig";
 import { useRootNavigationState, useRouter } from "expo-router";
 import { useAuth } from "@/context/AuthContext";
+import Ionicons from "@expo/vector-icons/Ionicons";
+import { useTheme } from "@/context/ThemeContext";
+import CustomAlert from "@/components/CustomAlert";
+import { updateProfile } from "firebase/auth";
 // import { usePushNotifications } from "@/utils/notifications";
 
 const HomeScreen = () => {
@@ -277,17 +46,47 @@ const HomeScreen = () => {
   const [isAdmin, setIsAdmin] = useState(false);
 
   const [isPublic, setIsPublic] = useState(true);
-
+  const [visibleModal, setVisibleModal] = useState(false);
+  const closeModal = () => setVisibleModal(false);
+  const openModal = () => setVisibleModal(true);
   const router = useRouter();
   const { user, logout } = useAuth();
   const navigationState = useRootNavigationState();
-
+  const { isDark } = useTheme();
+  const BackgroundColor = isDark ? "#000000" : "#FFFFFF";
+  const TextColor = isDark ? "#FFFFFF" : "#000000";
+  const ListColor = isDark ? "#4A5c6A" : "#9BA8AB";
+  const [activeSegment, setActiveSegment] = useState("yours");
+  const [loading, setLoading] = useState(false);
+  const [nameModel, setNameModel] = useState(false);
   useEffect(() => {
     if (!navigationState?.key) return;
     if (!user) {
       router.replace("/login");
     }
   }, [user, navigationState]);
+  useEffect(() => {
+    setLoading(true);
+    const user = auth.currentUser;
+    if (!user) return;
+
+    const userDocRef = doc(db, "users", user.uid);
+
+    const unsubscribe = onSnapshot(userDocRef, (docSnap) => {
+      const userData = docSnap.data();
+      // console.log("Live user data:", userData);
+      if (!userData?.name) {
+        setNameModel(true);
+
+        // setLoading(false);
+      } else {
+        setNameModel(false);
+        // setLoading(false);
+      }
+    });
+
+    return () => unsubscribe();
+  }, [user]);
   useEffect(() => {
     const fetchAdminStatus = async () => {
       const isAdmin = await checkIfUserIsAdmin();
@@ -298,6 +97,7 @@ const HomeScreen = () => {
 
     fetchAdminStatus();
   }, []);
+
   useEffect(() => {
     const q = query(collection(db, "groups"), orderBy("createdAt", "desc"));
     const unsubscribe = onSnapshot(q, async (snapshot) => {
@@ -318,6 +118,7 @@ const HomeScreen = () => {
       );
       setMembershipMap(map);
       // console.log("Membership Map:", map);
+      setLoading(false);
     });
 
     return unsubscribe;
@@ -344,7 +145,10 @@ const HomeScreen = () => {
   };
   const handleCreateGroup = async () => {
     if (!newGroupName.trim()) {
-      Alert.alert("Please enter a group name");
+      // Alert.alert("Please enter a group name");
+      setAlertTitle("Creating Group");
+      setAlertMessage("Please enter a group name.");
+      setAlertVisible(true);
       return;
     }
 
@@ -359,16 +163,33 @@ const HomeScreen = () => {
         members: [auth.currentUser?.uid],
       });
       setNewGroupName("");
+      closeModal();
     } catch (error) {
       Alert.alert("Error creating group", (error as Error).message);
     }
   };
 
-  const joinPublicGroup = (groupId: string, groupName: string) => {
-    router.push({
-      pathname: "/chatroom",
-      params: { id: groupId, name: groupName },
-    });
+  const joinPublicGroup = async (groupId: string, groupName: string) => {
+    const userId = auth.currentUser?.uid;
+    if (!userId) return;
+    try {
+      const requestRef = doc(db, `groups/${groupId}/members`, userId);
+      await setDoc(requestRef, {
+        userId,
+        requestedAt: new Date(),
+      });
+
+      // Alert.alert("Added Successfully.");
+      setAlertTitle("Joining Group");
+      setAlertMessage("Added Successfully.");
+      setAlertVisible(true);
+      router.push({
+        pathname: "/chatroom",
+        params: { id: groupId, name: groupName },
+      });
+    } catch (error) {
+      Alert.alert("Error", (error as Error).message);
+    }
   };
 
   const requestToJoinPrivateGroup = async (groupId: string) => {
@@ -382,7 +203,10 @@ const HomeScreen = () => {
         requestedAt: new Date(),
       });
 
-      Alert.alert("Join request sent. Please wait for admin approval.");
+      // Alert.alert("Join request sent. Please wait for admin approval.");
+      setAlertTitle("Join request sent");
+      setAlertMessage("Please wait for admin approval.");
+      setAlertVisible(true);
     } catch (error) {
       Alert.alert("Error", (error as Error).message);
     }
@@ -398,44 +222,73 @@ const HomeScreen = () => {
   };
 
   const goToChat = async (groupId: string, groupName: string) => {
+    setLoading(true);
     const selectedGroup = groups.find((g) => g.id === groupId);
     const groupRef = doc(db, "groups", groupId);
     const groupSnap = await getDoc(groupRef);
 
     if (!groupSnap.exists()) {
-      Alert.alert("Group not found");
+      // Alert.alert("Group not found");
+      setLoading(false);
+      setAlertTitle("Group not found");
+      setAlertMessage("The group you are trying to access does not exist.");
+      setAlertVisible(true); // Show custom alert
       return;
     }
 
     const groupData = groupSnap.data();
     const currentUserId = auth.currentUser?.uid;
     const isAdmin = groupData.createdBy === currentUserId;
+    if (!currentUserId) {
+      // Alert.alert(
+      //   "Authentication error",
+      //   "You must be logged in to join the group."
+      // );
+      setLoading(false);
+      setAlertTitle("Authentication error");
+      setAlertMessage("You must be logged in to join the group.");
+      setAlertVisible(true); // Show custom alert
+      return;
+    }
 
-    const memberDocRef = doc(
-      db,
-      `groups/${groupId}/members`,
-      currentUserId || ""
-    );
+    const memberDocRef = doc(db, `groups/${groupId}/members`, currentUserId);
     const memberSnap = await getDoc(memberDocRef);
-
+    if (groupData.isPublic && !memberSnap.exists() && !isAdmin) {
+      // Alert.alert("Please Join Group first");
+      setLoading(false);
+      setAlertTitle("Group Joining");
+      setAlertMessage("Please Join Group first.");
+      setAlertVisible(true);
+      return;
+    }
     if (
       !groupData.isPublic &&
       !memberSnap.exists() &&
       !isAdmin &&
       !groupData.blockedUsers?.includes(currentUserId)
     ) {
-      Alert.alert(
-        "Join request pending",
+      // Alert.alert(
+      //   "Join request pending",
+      //   "You must be approved by the group admin to join this private group."
+      // );
+      setLoading(false);
+      setAlertTitle("Join request pending");
+      setAlertMessage(
         "You must be approved by the group admin to join this private group."
       );
+      setAlertVisible(true);
       return;
     }
 
     if (groupData.blockedUsers?.includes(currentUserId)) {
-      Alert.alert("Access Denied", "You have been blocked from this group.");
+      // Alert.alert("Access Denied", "You have been blocked from this group.");
+      setLoading(false);
+      setAlertTitle("Access Denied");
+      setAlertMessage("You have been blocked from this group.");
+      setAlertVisible(true);
       return;
     }
-
+    setLoading(false);
     router.push({
       pathname: "/chatroom",
       params: {
@@ -445,35 +298,128 @@ const HomeScreen = () => {
       },
     });
   };
+  // const [alertVisible, setAlertVisible] = useState(false);
+  const [alertVisible, setAlertVisible] = useState(false);
+  const [alertTitle, setAlertTitle] = useState("");
+  const [alertMessage, setAlertMessage] = useState("");
+  const showAlert = (title: string, message: string) => {
+    setAlertVisible(true);
+    // You can set the title and message dynamically if needed
+  };
 
+  const closeAlert = () => {
+    setAlertVisible(false);
+  };
+  const [username, setUserName] = useState("");
+  const handleSaveName = async () => {
+    const currentUser = auth.currentUser;
+
+    if (!currentUser) return; // 👈 Make sure user is available
+
+    const uid = currentUser.uid;
+    if (username.trim() === "") return;
+
+    const userDocRef = doc(db, "users", uid);
+    await setDoc(userDocRef, { name: username.trim() }, { merge: true });
+    await updateProfile(currentUser, { displayName: username.trim() });
+    setNameModel(false);
+  };
   return (
-    <View style={styles.container}>
-      {isAdmin ? (
-        <TouchableOpacity onPress={() => router.push("/AdminDashboard")}>
-          <Text style={styles.title}>Create a Group</Text>
-        </TouchableOpacity>
-      ) : (
-        <Text style={styles.title}>Create a Group</Text>
-      )}
-
-      <TextInput
-        value={newGroupName}
-        onChangeText={setNewGroupName}
-        placeholder="Enter group name"
-        style={styles.input}
+    <View style={[styles.container, { backgroundColor: BackgroundColor }]}>
+      <StatusBar style="light" />
+      {/* Custom Alert Component */}
+      <CustomAlert
+        visible={alertVisible}
+        title={alertTitle}
+        message={alertMessage}
+        onClose={closeAlert}
       />
+      <View
+        style={{
+          flexDirection: "row",
+          justifyContent: "space-between",
+          marginVertical: 15,
+        }}
+      >
+        {isAdmin ? (
+          <TouchableOpacity onPress={() => router.push("/AdminDashboard")}>
+            <Text style={[styles.title, { color: TextColor, paddingLeft: 5 }]}>
+              Your Groups
+            </Text>
+          </TouchableOpacity>
+        ) : (
+          <Text style={[styles.title, { color: TextColor }]}>Your Groups</Text>
+        )}
 
-      <View style={styles.switchContainer}>
-        <Text style={styles.switchLabel}>Is this group Public?</Text>
-        <Switch value={isPublic} onValueChange={setIsPublic} />
+        <TouchableOpacity
+          onPress={openModal}
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            padding: 5,
+            borderRadius: 8,
+            backgroundColor: "#457B9D",
+          }}
+        >
+          <Ionicons name="create" size={24} color="white" />
+          <Text style={{ fontWeight: "bold", color: "#fff", marginLeft: 5 }}>
+            Create Group
+          </Text>
+        </TouchableOpacity>
       </View>
 
-      <Button title="Create Group" onPress={handleCreateGroup} />
-
-      <Text style={styles.title}>Your Groups</Text>
-
+      {/* Segment Tabs */}
+      <View style={styles.segmentContainer}>
+        <TouchableOpacity
+          style={[
+            styles.segmentButton,
+            activeSegment === "yours" && styles.activeSegment,
+          ]}
+          onPress={() => setActiveSegment("yours")}
+        >
+          <Text
+            style={
+              activeSegment === "yours"
+                ? styles.activeText
+                : styles.inactiveText
+            }
+          >
+            Your Groups
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[
+            styles.segmentButton,
+            activeSegment === "all" && styles.activeSegment,
+          ]}
+          onPress={() => setActiveSegment("all")}
+        >
+          <Text
+            style={
+              activeSegment === "all" ? styles.activeText : styles.inactiveText
+            }
+          >
+            All Groups
+          </Text>
+        </TouchableOpacity>
+      </View>
+      {loading && (
+        <ActivityIndicator
+          size="large"
+          color="#0000ff"
+          style={{ marginTop: 20 }}
+        />
+      )}
       <FlatList
-        data={groups}
+        // data={groups}
+        data={
+          activeSegment === "yours"
+            ? groups.filter(
+                (group) =>
+                  membershipMap[group.id] || group.createdBy === currentUserId
+              )
+            : groups
+        }
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => {
           const isPublic = item.isPublic;
@@ -484,10 +430,12 @@ const HomeScreen = () => {
           return (
             <TouchableOpacity
               onPress={() => goToChat(item.id, item.name)}
-              style={styles.groupCard}
+              style={[styles.groupCard, { backgroundColor: ListColor }]}
             >
               <View style={styles.groupHeader}>
-                <Text style={styles.groupName}>{item.name}</Text>
+                <Text style={[styles.groupName, { color: TextColor }]}>
+                  {item.name}
+                </Text>
                 <View
                   style={[
                     styles.badge,
@@ -528,20 +476,123 @@ const HomeScreen = () => {
           );
         }}
       />
+      <Modal
+        visible={visibleModal}
+        transparent
+        animationType="slide"
+        onRequestClose={closeModal}
+      >
+        <View style={styles.modalOverlay}>
+          <View
+            style={[
+              styles.modalContent,
+              // { backgroundColor: hometheme },
+            ]}
+          >
+            <TouchableOpacity style={styles.closeButton} onPress={closeModal}>
+              <Text style={styles.closeText}>✕</Text>
+            </TouchableOpacity>
+
+            <Text style={styles.modalTitle}>Create Group</Text>
+            <TextInput
+              value={newGroupName}
+              onChangeText={setNewGroupName}
+              placeholder="Enter group name"
+              placeholderTextColor="#bbb"
+              maxLength={20}
+              style={styles.input}
+            />
+
+            <View style={styles.switchContainer}>
+              <Text style={styles.switchLabel}>Is this group Public?</Text>
+              <Switch value={isPublic} onValueChange={setIsPublic} />
+            </View>
+            <TouchableOpacity
+              style={{
+                marginBottom: 10,
+                padding: 15,
+                backgroundColor: "green",
+                borderRadius: 12,
+              }}
+              onPress={handleCreateGroup}
+            >
+              <Text
+                style={{
+                  color: "#FFF",
+                  fontSize: 16,
+                  textAlign: "center",
+                }}
+              >
+                Create Group
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+      <Modal animationType="slide" transparent={true} visible={nameModel}>
+        <View style={styles.modalOverlay}>
+          {loading ? (
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>Welcome to Aida Group Chat!</Text>
+              <ActivityIndicator
+                size="large"
+                color="#0000ff"
+                style={{ marginTop: 20 }}
+              />
+            </View>
+          ) : (
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>
+                Please enter your name to continue:
+              </Text>
+
+              <TextInput
+                placeholder="Your name"
+                placeholderTextColor="#bbb"
+                value={username}
+                onChangeText={setUserName}
+                style={styles.input}
+              />
+              <TouchableOpacity
+                style={{
+                  marginBottom: 10,
+                  padding: 15,
+                  backgroundColor: "green",
+                  borderRadius: 12,
+                }}
+                onPress={handleSaveName}
+              >
+                <Text
+                  style={{
+                    color: "#FFF",
+                    fontSize: 16,
+                    textAlign: "center",
+                  }}
+                >
+                  Save Username
+                </Text>
+              </TouchableOpacity>
+              {/* <Button title="Save" onPress={handleSaveName} /> */}
+            </View>
+          )}
+        </View>
+      </Modal>
     </View>
   );
 };
 
 export default HomeScreen;
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 20, backgroundColor: "#fff" },
-  title: { fontSize: 20, fontWeight: "bold", marginTop: 20 },
+  container: { flex: 1, padding: 5, paddingTop: 50 },
+  title: { fontSize: 25, fontWeight: "bold", marginTop: 20, marginLeft: 5 },
   input: {
-    borderWidth: 1,
-    borderColor: "#ccc",
+    fontSize: 14,
+    padding: 12,
+    backgroundColor: "#457B9D",
     borderRadius: 8,
-    padding: 10,
-    marginVertical: 10,
+    color: "#FFF",
+    width: "100%",
+    marginBottom: 10,
   },
   switchContainer: {
     flexDirection: "row",
@@ -551,10 +602,14 @@ const styles = StyleSheet.create({
   switchLabel: {
     fontSize: 16,
     marginRight: 10,
+    color: "#FFF",
   },
 
   groupCard: {
-    backgroundColor: "#fff",
+    // backgroundColor: "#fff",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     padding: 16,
     borderRadius: 12,
     marginVertical: 8,
@@ -565,9 +620,10 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   groupHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
+    flexDirection: "column",
+    justifyContent: "flex-start",
+    gap: 5,
+    // alignItems: "center",
     marginBottom: 10,
   },
   groupName: {
@@ -578,11 +634,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 12,
+    flexDirection: "row",
+    justifyContent: "flex-start",
+    minWidth: 60,
   },
   badgeText: {
     color: "#fff",
     fontWeight: "600",
-    fontSize: 12,
+    fontSize: 10,
+    textAlign: "center",
   },
   buttonContainer: {
     flexDirection: "row",
@@ -607,5 +667,61 @@ const styles = StyleSheet.create({
   requestButtonText: {
     color: "#fff",
     fontWeight: "600",
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    justifyContent: "flex-end",
+  },
+  modalContent: {
+    backgroundColor: "#1D3557",
+    padding: 20,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    width: "100%",
+    alignItems: "center",
+  },
+  closeButton: {
+    alignSelf: "flex-end",
+    padding: 10,
+  },
+  closeText: {
+    fontSize: 18,
+    fontWeight: "bold",
+    color: "#FFF",
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: "bold",
+    color: "#FFF",
+    marginBottom: 15,
+  },
+  segmentContainer: {
+    flexDirection: "row",
+    backgroundColor: "#e0e0e0",
+    borderRadius: 8,
+    overflow: "hidden",
+  },
+  segmentButton: {
+    flex: 1,
+    paddingVertical: 10,
+    alignItems: "center",
+  },
+  activeSegment: {
+    backgroundColor: "#6200ee",
+  },
+  activeText: {
+    color: "#fff",
+    fontWeight: "700",
+  },
+  inactiveText: {
+    color: "#333",
+    fontWeight: "500",
+  },
+  modalContainer: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
   },
 });

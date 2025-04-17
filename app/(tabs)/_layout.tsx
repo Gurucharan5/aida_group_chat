@@ -8,14 +8,18 @@ import TabBarBackground from '@/components/ui/TabBarBackground';
 import { Colors } from '@/constants/Colors';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { useTheme } from '@/context/ThemeContext';
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
-
+  const {isDark} = useTheme();
+  const BackgroundColor = isDark ? "#263A47" : "#FFFFFF";
+  const TextColor = isDark ? "#FFFFFF" : "#000000";
+  const ListColor = isDark ? "#4A5c6A" : "#9BA8AB";
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
+        // tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
         headerShown: false,
         tabBarButton: HapticTab,
         tabBarBackground: TabBarBackground,
@@ -24,7 +28,12 @@ export default function TabLayout() {
             // Use a transparent background on iOS to show the blur effect
             position: 'absolute',
           },
-          default: {},
+          default: {
+            backgroundColor: BackgroundColor,
+            borderTopWidth: 3,
+            height: 60,
+            paddingBottom: 10,
+          },
         }),
       }}>
       <Tabs.Screen

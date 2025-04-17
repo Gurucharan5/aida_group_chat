@@ -28,6 +28,7 @@ import {
 } from "firebase/firestore";
 import { auth, db } from "../firebaseConfig";
 import { sendPushNotification } from "@/helpers/SendNotification";
+import { useTheme } from "@/context/ThemeContext";
 
 interface Message {
   id: string;
@@ -52,7 +53,10 @@ export default function ChatRoom() {
   const PAGE_SIZE = 20;
   const [newMessage, setNewMessage] = useState("");
   const flatListRef = useRef<FlatList>(null);
-
+  const { isDark } = useTheme();
+  const BackgroundColor = isDark ? "#000000" : "#FFFFFF";
+  const TextColor = isDark ? "#FFFFFF" : "#000000";
+  const ListColor = isDark ? "#4A5c6A" : "#9BA8AB";
   useEffect(() => {
     if (flatListRef.current && messages.length > 0) {
       flatListRef.current.scrollToEnd({ animated: true });
@@ -147,7 +151,9 @@ export default function ChatRoom() {
           .map((docSnap) => docSnap.data().expoPushToken as string);
       } else {
         // Fetch only group members for private group
-        const membersSnap = await getDocs(collection(db, `groups/${groupId}/members`));
+        const membersSnap = await getDocs(
+          collection(db, `groups/${groupId}/members`)
+        );
         const memberIds = membersSnap.docs.map((doc) => doc.id);
         const memberDocs = await Promise.all(
           memberIds.map((userId) => getDoc(doc(db, "users", userId)))
@@ -157,7 +163,8 @@ export default function ChatRoom() {
           .filter(
             (docSnap) =>
               docSnap.exists() &&
-              docSnap.id !== senderId && docSnap.data().expoPushToken
+              docSnap.id !== senderId &&
+              docSnap.data().expoPushToken
           )
           .map((docSnap) => docSnap.data()!.expoPushToken as string);
       }
@@ -198,10 +205,10 @@ export default function ChatRoom() {
   return (
     <KeyboardAvoidingView
       behavior={Platform.select({ ios: "padding", android: undefined })}
-      style={styles.container}
+      style={[styles.container, { backgroundColor: BackgroundColor }]}
       keyboardVerticalOffset={100}
     >
-      <Text style={styles.header}>{groupName}</Text>
+      <Text style={[styles.header,{color: TextColor}]}>{groupName}</Text>
       {isAppAdmin && (
         <View style={{ padding: 10 }}>
           <Button
@@ -235,6 +242,7 @@ export default function ChatRoom() {
         data={messages}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => (
+          
           <TouchableOpacity
             onLongPress={() =>
               Alert.alert(
@@ -248,9 +256,9 @@ export default function ChatRoom() {
               )
             }
           >
-            <View style={styles.messageBubble}>
-              <Text style={styles.sender}>{item.sender}</Text>
-              <Text>{item.text}</Text>
+            <View style={[styles.messageBubble, { backgroundColor: ListColor }]}>
+              <Text style={[styles.sender,{color: TextColor}]}>{item.sender}</Text>
+              <Text style={{color: TextColor}}>{item.text}</Text>
             </View>
           </TouchableOpacity>
         )}
@@ -262,7 +270,8 @@ export default function ChatRoom() {
           value={newMessage}
           onChangeText={setNewMessage}
           placeholder="Type a message..."
-          style={styles.input}
+          placeholderTextColor={TextColor}
+          style={[styles.input,{color: TextColor}]}
         />
         <Button title="Send" onPress={sendMessage} />
       </View>
@@ -271,7 +280,7 @@ export default function ChatRoom() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#fff" },
+  container: { flex: 1 },
   header: {
     fontSize: 18,
     fontWeight: "bold",

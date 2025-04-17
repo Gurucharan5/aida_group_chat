@@ -53,7 +53,7 @@ import React, {
   
       notificationListener.current =
         Notifications.addNotificationReceivedListener((notification) => {
-          console.log("🔔 Notification Received: ", notification);
+          // console.log("🔔 Notification Received: ", notification);
           setNotification(notification);
         });
   

@@ -3,6 +3,7 @@ import { AuthProvider } from "@/context/AuthContext";
 import { NotificationProvider } from "@/context/NotificationContext";
 import { Slot } from "expo-router";
 import * as Notifications from "expo-notifications";
+import { ThemeProvider } from "@/context/ThemeContext";
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -14,9 +15,11 @@ Notifications.setNotificationHandler({
 export default function Layout() {
   return (
     <AuthProvider>
-      <NotificationProvider>
-        <Slot />
-      </NotificationProvider>
+      <ThemeProvider>
+        <NotificationProvider>
+          <Slot />
+        </NotificationProvider>
+      </ThemeProvider>
     </AuthProvider>
   );
 }

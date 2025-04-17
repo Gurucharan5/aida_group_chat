@@ -10,8 +10,9 @@ import {
   signOut,
   updateProfile,
 } from "firebase/auth";
-import { auth } from "../firebaseConfig";
+import { auth, db } from "../firebaseConfig";
 import { router } from "expo-router";
+import { doc, setDoc } from "firebase/firestore";
 
 interface AuthContextProps {
   user: string | null;
@@ -106,6 +107,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     const result = await createUserWithEmailAndPassword(auth, email, password);
     await sendEmailVerification(result.user);
     await updateProfile(result.user, { displayName: username });
+    // Save the username in Firestore under 'name' field
+    await setDoc(doc(db, "users", result.user.uid), {
+      name: username,
+      email: email, // optional: you can include this if you want
+      createdAt: new Date(),
+    });
     setUser(null); // Prevent login until verified
 
     // Redirect to verify-email screen
@@ -116,12 +123,20 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const loginWithEmail = async (email: any, password: any) => {
     const result = await signInWithEmailAndPassword(auth, email, password);
     await AsyncStorage.setItem("guestName", email);
-    console.log("User logged in:", result.user);
-    console.log(result.user.displayName, "-------------------");
-    const displayName = result.user.displayName || email;
-    await updateProfile(result.user, { displayName: displayName });
+    // console.log("User logged in:", result.user);
+    // console.log(result.user.displayName, "-------------------");
+    // const displayName = result.user.displayName || email;
+    // await updateProfile(result.user, { displayName: displayName });
     // console.log("User logged in:", result.user);
     setUser(email);
+    const savedToken = await AsyncStorage.getItem("expoPushToken");
+    if (savedToken) {
+      await setDoc(
+        doc(db, "users", result.user.uid),
+        { expoPushToken: savedToken },
+        { merge: true }
+      );
+    }
     // setUser(result.user);
   };
   const checkEmailVerified = async (): Promise<boolean> => {
@@ -134,6 +149,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         currentUser.email || "Verified User"
       );
       setUser(currentUser.email || "Verified User");
+      const savedToken = await AsyncStorage.getItem("expoPushToken");
+      if (savedToken) {
+        await setDoc(
+          doc(db, "users", currentUser?.uid),
+          { expoPushToken: savedToken },
+          { merge: true }
+        );
+      }
       return true;
     }
     return false;

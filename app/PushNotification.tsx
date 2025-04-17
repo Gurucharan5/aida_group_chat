@@ -30,20 +30,20 @@ const PushNotification = () => {
           Accept: "application/json",
         },
       });
-      console.log("Notification sent successfully!");
+      // console.log("Notification sent successfully!");
     } catch (error) {
       console.error("Error sending notification:", error);
     }
   };
 
   const sendNotification = () => {
-    console.log("coming inside send notification");
+    // console.log("coming inside send notification");
     sendPushNotification(expoToken);
   };
   if (error) {
     return <Text>Error: {error.message}</Text>;
   }
-  console.log(JSON.stringify(notification, null, 2));
+  // console.log(JSON.stringify(notification, null, 2));
   return (
     <View style={{ flex: 1 }}>
       <SafeAreaView
