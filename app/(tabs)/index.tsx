@@ -152,9 +152,12 @@ const HomeScreen = () => {
       return;
     }
 
+    const newGroup = newGroupName;
+    setNewGroupName("");
+    closeModal();
     try {
-      await addDoc(collection(db, "groups"), {
-        name: newGroupName,
+      const groupRef = await addDoc(collection(db, "groups"), {
+        name: newGroup,
         createdAt: new Date(),
         createdBy: auth.currentUser?.uid,
         adminId: auth.currentUser?.uid,
@@ -162,8 +165,21 @@ const HomeScreen = () => {
         blockedUsers: [],
         members: [auth.currentUser?.uid],
       });
-      setNewGroupName("");
-      closeModal();
+      // Ensure the user is logged in and the user ID exists
+      const currentUserId = auth.currentUser?.uid;
+      if (!currentUserId) {
+        setAlertTitle("Error");
+        setAlertMessage("You must be logged in to create a group.");
+        setAlertVisible(true);
+        return;
+      }
+      // Add the current user to the members collection
+      const memberRef = doc(db, `groups/${groupRef.id}/members`, currentUserId);
+      await setDoc(memberRef, {
+        userId: auth.currentUser?.uid,
+        displayName: auth.currentUser?.displayName || "Guest",
+        joinedAt: new Date(),
+      });
     } catch (error) {
       Alert.alert("Error creating group", (error as Error).message);
     }
@@ -193,13 +209,16 @@ const HomeScreen = () => {
   };
 
   const requestToJoinPrivateGroup = async (groupId: string) => {
-    const userId = auth.currentUser?.uid;
-    if (!userId) return;
+    const user = auth.currentUser;
+    if (!user) return;
+
+    const { uid: userId, displayName } = user;
 
     try {
       const requestRef = doc(db, `groups/${groupId}/joinRequests`, userId);
       await setDoc(requestRef, {
         userId,
+        displayName: displayName,
         requestedAt: new Date(),
       });
 
@@ -221,56 +240,143 @@ const HomeScreen = () => {
     return snap.exists();
   };
 
+  // const goToChat = async (groupId: string, groupName: string) => {
+  //   setLoading(true);
+  //   const selectedGroup = groups.find((g) => g.id === groupId);
+  //   const groupRef = doc(db, "groups", groupId);
+  //   const groupSnap = await getDoc(groupRef);
+
+  //   if (!groupSnap.exists()) {
+
+  //     setLoading(false);
+  //     setAlertTitle("Group not found");
+  //     setAlertMessage("The group you are trying to access does not exist.");
+  //     setAlertVisible(true); // Show custom alert
+  //     return;
+  //   }
+
+  //   const groupData = groupSnap.data();
+  //   const currentUserId = auth.currentUser?.uid;
+  //   const isAdmin = groupData.createdBy === currentUserId;
+  //   const isBlocked = groupData.blockedUsers?.some(
+  //     (user: { userId: string; displayName: string }) => user.userId === currentUserId
+  //   );
+  //   if (!currentUserId) {
+
+  //     setLoading(false);
+  //     setAlertTitle("Authentication error");
+  //     setAlertMessage("You must be logged in to join the group.");
+  //     setAlertVisible(true); // Show custom alert
+  //     return;
+  //   }
+
+  //   const memberDocRef = doc(db, `groups/${groupId}/members`, currentUserId);
+  //   const memberSnap = await getDoc(memberDocRef);
+  //   if (groupData.isPublic && !memberSnap.exists() && !isAdmin) {
+
+  //     setLoading(false);
+  //     setAlertTitle("Group Joining");
+  //     setAlertMessage("Please Join Group first.");
+  //     setAlertVisible(true);
+  //     return;
+  //   }
+  //   if (
+  //     !groupData.isPublic &&
+  //     !memberSnap.exists() &&
+  //     !isAdmin &&
+  //     !isBlocked
+  //   ) {
+  //     setLoading(false);
+  //     setAlertTitle("Join request pending");
+  //     setAlertMessage(
+  //       "You must be approved by the group admin to join this private group."
+  //     );
+  //     setAlertVisible(true);
+  //     return;
+  //   }
+
+  //   if (isBlocked) {
+  //     setLoading(false);
+  //     setAlertTitle("Access Denied");
+  //     setAlertMessage("You have been blocked from this group.");
+  //     setAlertVisible(true);
+  //     return;
+  //   }
+  //   setLoading(false);
+  //   router.push({
+  //     pathname: "/chatroom",
+  //     params: {
+  //       id: groupId,
+  //       name: groupName,
+  //       createdBy: selectedGroup?.createdBy,
+  //     },
+  //   });
+  // };
+
   const goToChat = async (groupId: string, groupName: string) => {
     setLoading(true);
-    const selectedGroup = groups.find((g) => g.id === groupId);
-    const groupRef = doc(db, "groups", groupId);
-    const groupSnap = await getDoc(groupRef);
+    const currentUserId = auth.currentUser?.uid;
 
-    if (!groupSnap.exists()) {
-      // Alert.alert("Group not found");
+    if (!currentUserId) {
+      setLoading(false);
+      setAlertTitle("Authentication error");
+      setAlertMessage("You must be logged in to join the group.");
+      setAlertVisible(true);
+      return;
+    }
+
+    const selectedGroup = groups.find((g) => g.id === groupId);
+    if (!selectedGroup) {
       setLoading(false);
       setAlertTitle("Group not found");
       setAlertMessage("The group you are trying to access does not exist.");
-      setAlertVisible(true); // Show custom alert
+      setAlertVisible(true);
+      return;
+    }
+
+    // Fetch group + member data in parallel
+    const groupRef = doc(db, "groups", groupId);
+    const memberDocRef = doc(db, `groups/${groupId}/members`, currentUserId);
+    const [groupSnap, memberSnap] = await Promise.all([
+      getDoc(groupRef),
+      getDoc(memberDocRef),
+    ]);
+
+    if (!groupSnap.exists()) {
+      setLoading(false);
+      setAlertTitle("Group not found");
+      setAlertMessage("The group you are trying to access does not exist.");
+      setAlertVisible(true);
       return;
     }
 
     const groupData = groupSnap.data();
-    const currentUserId = auth.currentUser?.uid;
     const isAdmin = groupData.createdBy === currentUserId;
-    if (!currentUserId) {
-      // Alert.alert(
-      //   "Authentication error",
-      //   "You must be logged in to join the group."
-      // );
+
+    const isBlocked = groupData.blockedUsers?.some(
+      (user: { userId: string; displayName: string }) =>
+        user.userId === currentUserId
+    );
+
+    if (isBlocked) {
       setLoading(false);
-      setAlertTitle("Authentication error");
-      setAlertMessage("You must be logged in to join the group.");
-      setAlertVisible(true); // Show custom alert
+      setAlertTitle("Access Denied");
+      setAlertMessage("You have been blocked from this group.");
+      setAlertVisible(true);
       return;
     }
 
-    const memberDocRef = doc(db, `groups/${groupId}/members`, currentUserId);
-    const memberSnap = await getDoc(memberDocRef);
-    if (groupData.isPublic && !memberSnap.exists() && !isAdmin) {
-      // Alert.alert("Please Join Group first");
+    const isMember = memberSnap.exists();
+
+    if (groupData.isPublic && !isMember && !isAdmin) {
       setLoading(false);
       setAlertTitle("Group Joining");
       setAlertMessage("Please Join Group first.");
       setAlertVisible(true);
       return;
     }
-    if (
-      !groupData.isPublic &&
-      !memberSnap.exists() &&
-      !isAdmin &&
-      !groupData.blockedUsers?.includes(currentUserId)
-    ) {
-      // Alert.alert(
-      //   "Join request pending",
-      //   "You must be approved by the group admin to join this private group."
-      // );
+
+    if (!groupData.isPublic && !isMember && !isAdmin) {
       setLoading(false);
       setAlertTitle("Join request pending");
       setAlertMessage(
@@ -280,24 +386,17 @@ const HomeScreen = () => {
       return;
     }
 
-    if (groupData.blockedUsers?.includes(currentUserId)) {
-      // Alert.alert("Access Denied", "You have been blocked from this group.");
-      setLoading(false);
-      setAlertTitle("Access Denied");
-      setAlertMessage("You have been blocked from this group.");
-      setAlertVisible(true);
-      return;
-    }
     setLoading(false);
     router.push({
       pathname: "/chatroom",
       params: {
         id: groupId,
         name: groupName,
-        createdBy: selectedGroup?.createdBy,
+        createdBy: selectedGroup.createdBy,
       },
     });
   };
+
   // const [alertVisible, setAlertVisible] = useState(false);
   const [alertVisible, setAlertVisible] = useState(false);
   const [alertTitle, setAlertTitle] = useState("");
