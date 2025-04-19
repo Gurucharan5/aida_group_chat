@@ -8,9 +8,9 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export async function registerForPushNotificationsAsync() {
   if (Platform.OS === "android") {
-    await Notifications.setNotificationChannelAsync("default", {
-      name: "default",
-      importance: Notifications.AndroidImportance.MAX,
+    await Notifications.setNotificationChannelAsync("group-chat", {
+      name: "Group Chat",
+      importance: Notifications.AndroidImportance.HIGH,
       vibrationPattern: [0, 250, 250, 250],
       lightColor: "#FF231F7C",
     });

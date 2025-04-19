@@ -12,7 +12,8 @@ import {
   Alert,
   Image,
 } from "react-native";
-import { router, useLocalSearchParams } from "expo-router";
+import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
+import Ionicons from "@expo/vector-icons/Ionicons";
 import {
   collection,
   addDoc,
@@ -30,27 +31,37 @@ import {
   where,
   deleteDoc,
 } from "firebase/firestore";
-import Video from "expo-video";
 
 import { auth, db } from "../firebaseConfig";
 import { sendPushNotification } from "@/helpers/SendNotification";
 import { useTheme } from "@/context/ThemeContext";
-import * as ImagePicker from "expo-image-picker";
-import { uploadBytes, ref, getDownloadURL } from "firebase/storage";
-import { storage } from "../firebaseConfig";
+import FontAwesome from "@expo/vector-icons/FontAwesome";
 import { pickAndUploadImage } from "@/helpers/ImageSend";
 import { pickAndUploadVideo } from "@/helpers/VideoSend";
 import VideoMessagePlayer from "@/components/VideoMessagePlayer";
-import { Ionicons } from "@expo/vector-icons";
+// import { Ionicons } from "@expo/vector-icons";
 import { usePreventScreenCapture } from "expo-screen-capture";
+import GroupAccessModal from "./GroupAccessModal";
+import { useToast } from "@/context/ToastContext";
+
 interface Message {
   id: string;
-  text: string;
+  text?: string;
   sender: string;
-  createdAt: Timestamp;
+  imageUrl?: string;
+  videoUrl?: string;
+  createdAt: any;
+  replyTo?: {
+    sender: string;
+    text?: string | null;
+    messageId: string;
+  } | null;
 }
-const CLOUDINARY_URL = "https://api.cloudinary.com/v1_1/dhhqviw8d/image/upload";
-const UPLOAD_PRESET = "aida_upload";
+type ReplyInfo = {
+  id: string;
+  text?: string;
+  sender: string;
+};
 export default function ChatRoom() {
   const {
     id: groupId,
@@ -72,11 +83,25 @@ export default function ChatRoom() {
   const BackgroundColor = isDark ? "#000000" : "#FFFFFF";
   const TextColor = isDark ? "#FFFFFF" : "#000000";
   const ListColor = isDark ? "#4A5c6A" : "#9BA8AB";
+  const [modalVisible, setModalVisible] = useState(true);
+  const [replyToMessage, setReplyToMessage] = useState<ReplyInfo | null>(null);
+  // const navigation = useNavigation();
   useEffect(() => {
     if (flatListRef.current && messages.length > 0) {
       flatListRef.current.scrollToEnd({ animated: true });
     }
   }, [messages]);
+  useFocusEffect(
+    React.useCallback(() => {
+      return () => {
+        const userId = auth.currentUser?.uid;
+        if (userId && !modalVisible) {
+          const lastSeenRef = doc(db, "groups", groupId, "members", userId);
+          setDoc(lastSeenRef, { lastSeen: Timestamp.now() }, { merge: true });
+        }
+      };
+    }, [groupId, modalVisible])
+  );
 
   useEffect(() => {
     const q = query(
@@ -141,67 +166,33 @@ export default function ChatRoom() {
     setNewMessage("");
     await addDoc(collection(db, "groups", groupId, "messages"), {
       text: messageText,
-      sender: auth.currentUser?.displayName || "Guest",
+      sender: senderName,
       createdAt: Timestamp.now(),
+      replyTo: replyToMessage
+        ? {
+            sender: replyToMessage.sender,
+            text: replyToMessage.text || null,
+            messageId: replyToMessage.id,
+          }
+        : null,
     });
+
+    setReplyToMessage(null); // Clear reply
+
+    // 2. Update the group's latestMessageTimestamp
+    await setDoc(
+      doc(db, "groups", groupId),
+      {
+        latestMessageTimestamp: Timestamp.now(),
+      },
+      { merge: true }
+    );
     await notifyGroupMembers({
       senderId,
       senderName,
       groupId,
       messageContent: messageText,
     });
-    // // Check if the group is public
-    // try {
-    //   const groupDocSnap = await getDoc(doc(db, "groups", groupId));
-    //   if (!groupDocSnap.exists()) {
-    //     console.error("Group not found");
-    //     return;
-    //   }
-
-    //   const groupData = groupDocSnap.data();
-    //   const isPublic = groupData.isPublic;
-
-    //   let tokens: string[] = [];
-
-    //   if (isPublic) {
-    //     // Fetch all users for public group
-    //     const usersSnap = await getDocs(collection(db, "users"));
-    //     tokens = usersSnap.docs
-    //       .filter(
-    //         (docSnap) => docSnap.id !== senderId && docSnap.data().expoPushToken
-    //       )
-    //       .map((docSnap) => docSnap.data().expoPushToken as string);
-    //   } else {
-    //     // Fetch only group members for private group
-    //     const membersSnap = await getDocs(
-    //       collection(db, `groups/${groupId}/members`)
-    //     );
-    //     const memberIds = membersSnap.docs.map((doc) => doc.id);
-    //     const memberDocs = await Promise.all(
-    //       memberIds.map((userId) => getDoc(doc(db, "users", userId)))
-    //     );
-
-    //     tokens = memberDocs
-    //       .filter(
-    //         (docSnap) =>
-    //           docSnap.exists() &&
-    //           docSnap.id !== senderId &&
-    //           docSnap.data().expoPushToken
-    //       )
-    //       .map((docSnap) => docSnap.data()!.expoPushToken as string);
-    //   }
-    //   await Promise.all(
-    //     tokens.map((token) =>
-    //       sendPushNotification(
-    //         token,
-    //         groupData.name || "Group",
-    //         `${senderName}: ${newMessage.trim()}`
-    //       )
-    //     )
-    //   );
-    // } catch (e) {
-    //   console.error("Failed to send notifications:", e);
-    // }
   };
   const handleReport = async (message: Message) => {
     try {
@@ -230,6 +221,14 @@ export default function ChatRoom() {
         sender: auth.currentUser?.displayName || "Guest",
         createdAt: Timestamp.now(),
       });
+      // 2. Update the group's latestMessageTimestamp
+      await setDoc(
+        doc(db, "groups", groupId),
+        {
+          latestMessageTimestamp: Timestamp.now(),
+        },
+        { merge: true }
+      );
       await notifyGroupMembers({
         senderId,
         senderName,
@@ -248,6 +247,14 @@ export default function ChatRoom() {
         sender: auth.currentUser?.displayName || "Guest",
         createdAt: Timestamp.now(),
       });
+      // 2. Update the group's latestMessageTimestamp
+      await setDoc(
+        doc(db, "groups", groupId),
+        {
+          latestMessageTimestamp: Timestamp.now(),
+        },
+        { merge: true }
+      );
       await notifyGroupMembers({
         senderId,
         senderName,
@@ -284,18 +291,7 @@ export default function ChatRoom() {
       if (manualTokenSnap.exists() && manualTokenSnap.data().expoPushToken) {
         tokens.push(manualTokenSnap.data().expoPushToken as string);
       }
-      if (isPublic) {
-        const usersSnap = await getDocs(collection(db, "users"));
-        tokens = [
-          ...tokens,
-          ...usersSnap.docs
-            .filter(
-              (docSnap) =>
-                docSnap.id !== senderId && docSnap.data().expoPushToken
-            )
-            .map((docSnap) => docSnap.data().expoPushToken as string),
-        ];
-      } else {
+      
         const membersSnap = await getDocs(
           collection(db, `groups/${groupId}/members`)
         );
@@ -323,7 +319,7 @@ export default function ChatRoom() {
               .map((docSnap) => docSnap.data().expoPushToken as string),
           ];
         }
-      }
+      
       // console.log(tokens, "----------------------------token");
       void Promise.all(
         tokens.map((token) =>
@@ -347,6 +343,52 @@ export default function ChatRoom() {
       Alert.alert("Error", "Could not delete message.");
     }
   };
+
+  const requestToJoinPrivateGroup = async (groupId: string) => {
+    const user = auth.currentUser;
+    if (!user) return;
+
+    const { uid: userId, displayName } = user;
+
+    try {
+      const requestRef = doc(db, `groups/${groupId}/joinRequests`, userId);
+      await setDoc(requestRef, {
+        userId,
+        displayName: displayName,
+        requestedAt: new Date(),
+      });
+    } catch (error) {
+      Alert.alert("Error", (error as Error).message);
+    }
+  };
+  const joinPublicGroup = async (groupId: string, groupName: string) => {
+    const user = auth.currentUser;
+    if (!user) return;
+
+    const { uid: userId, displayName } = user;
+    try {
+      const requestRef = doc(db, `groups/${groupId}/members`, userId);
+      await setDoc(requestRef, {
+        userId,
+        displayName: displayName,
+        requestedAt: new Date(),
+      });
+      showToast(`You Joined ${groupName}!`);
+      showToast(`Welcome to ${groupName}!`);
+    } catch (error) {
+      Alert.alert("Error", (error as Error).message);
+    }
+  };
+  // const [showToast, setShowToast] = useState(false);
+  const { showToast } = useToast();
+  const handleCancel = () => {
+    showToast("Group join request sent!");
+
+    router.back();
+  };
+  const handleReply = (message: any) => {
+    setReplyToMessage(message);
+  };
   return (
     <KeyboardAvoidingView
       behavior={Platform.select({ ios: "padding", android: undefined })}
@@ -354,6 +396,29 @@ export default function ChatRoom() {
       keyboardVerticalOffset={100}
     >
       <Text style={[styles.header, { color: TextColor }]}>{groupName}</Text>
+      <GroupAccessModal
+        visible={modalVisible}
+        groupId={groupId}
+        groupName={groupName}
+        onJoin={() => {
+          console.log("Send join request or add to group");
+          joinPublicGroup(groupId, groupName);
+          setModalVisible(false);
+        }}
+        onCancel={() => {
+          // setModalVisible(false);
+
+          router.back();
+        }}
+        onAllowed={() => {
+          setModalVisible(false);
+        }}
+        onSendRequest={() => {
+          console.log("request send successfully");
+          requestToJoinPrivateGroup(groupId);
+          handleCancel();
+        }}
+      />
       {isAppAdmin && (
         <View style={{ padding: 10 }}>
           <Button
@@ -399,17 +464,44 @@ export default function ChatRoom() {
           const isMediaMessage = item.imageUrl || item.videoUrl;
           return (
             <TouchableOpacity
-              onLongPress={() =>
-                Alert.alert(
-                  "Report Message",
-                  "Do you want to report this message?",
-                  [
-                    { text: "Cancel", style: "cancel" },
-                    { text: "Report", onPress: () => handleReport(item) },
-                  ],
-                  { cancelable: true }
-                )
-              }
+              onLongPress={() => {
+                if (isCurrentUser) {
+                  Alert.alert(
+                    "Message Options",
+                    "What do you want to do?",
+                    [
+                      {
+                        text: "Cancel",
+                        style: "cancel",
+                      },
+                      {
+                        text: "Reply",
+                        onPress: () => handleReply(item),
+                      },
+                      {
+                        text: "Delete",
+                        style: "destructive",
+                        onPress: () => handleDeleteMessage(item.id),
+                      },
+                    ],
+                    { cancelable: true }
+                  );
+                } else {
+                  Alert.alert(
+                    "Report Message",
+                    "Do you want to report this message?",
+                    [
+                      { text: "Cancel", style: "cancel" },
+                      {
+                        text: "Reply",
+                        onPress: () => handleReply(item),
+                      },
+                      { text: "Report", onPress: () => handleReport(item) },
+                    ],
+                    { cancelable: true }
+                  );
+                }
+              }}
             >
               <View
                 style={[
@@ -446,6 +538,23 @@ export default function ChatRoom() {
                       {item.text}
                     </Text>
                   ) : null}
+                  {item.replyTo && (
+                    <View
+                      style={{
+                        borderLeftWidth: 3,
+                        borderLeftColor: "#888",
+                        paddingLeft: 8,
+                        marginBottom: 4,
+                      }}
+                    >
+                      <Text style={{ fontSize: 12, fontWeight: "bold" }}>
+                        Replying to {item.replyTo.sender}
+                      </Text>
+                      <Text style={{ fontSize: 12 }} numberOfLines={1}>
+                        {item.replyTo.text || "[Media]"}
+                      </Text>
+                    </View>
+                  )}
                   {item.imageUrl ? (
                     <Image
                       source={{ uri: item.imageUrl }}
@@ -457,28 +566,29 @@ export default function ChatRoom() {
                   {item.videoUrl ? (
                     <VideoMessagePlayer videoUrl={item.videoUrl} />
                   ) : null}
+
                   {/* Delete Button (only for sender + media) */}
-          {isCurrentUser && isMediaMessage && (
-            <TouchableOpacity
-              onPress={() =>
-                Alert.alert(
-                  "Delete Media",
-                  "Are you sure you want to delete this media message?",
-                  [
-                    { text: "Cancel", style: "cancel" },
-                    {
-                      text: "Delete",
-                      style: "destructive",
-                      onPress: () => handleDeleteMessage(item.id),
-                    },
-                  ]
-                )
-              }
-              style={styles.deleteIcon}
-            >
-              <Ionicons name="trash" size={20} color="red" />
-            </TouchableOpacity>
-          )}
+                  {isCurrentUser && isMediaMessage && (
+                    <TouchableOpacity
+                      onPress={() =>
+                        Alert.alert(
+                          "Delete Media",
+                          "Are you sure you want to delete this media message?",
+                          [
+                            { text: "Cancel", style: "cancel" },
+                            {
+                              text: "Delete",
+                              style: "destructive",
+                              onPress: () => handleDeleteMessage(item.id),
+                            },
+                          ]
+                        )
+                      }
+                      style={styles.deleteIcon}
+                    >
+                      <Ionicons name="trash" size={20} color="red" />
+                    </TouchableOpacity>
+                  )}
                 </View>
               </View>
             </TouchableOpacity>
@@ -486,6 +596,27 @@ export default function ChatRoom() {
         }}
         contentContainerStyle={{ padding: 10 }}
       />
+      {replyToMessage && (
+        <View
+          style={{
+            backgroundColor: "#f0f0f0",
+            padding: 8,
+            borderLeftWidth: 4,
+            borderLeftColor: "#007AFF",
+            marginBottom: 6,
+            borderRadius: 6,
+          }}
+        >
+          <Text style={{ fontWeight: "bold" }}>
+            Replying to {replyToMessage.sender}
+          </Text>
+          <Text numberOfLines={1}>{replyToMessage.text || "[Media]"}</Text>
+          <TouchableOpacity onPress={() => setReplyToMessage(null)}>
+            <Text style={{ color: "red", marginTop: 4 }}>Cancel</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
       <View style={styles.inputRow}>
         <TextInput
           value={newMessage}
@@ -524,25 +655,6 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     marginVertical: 4,
   },
-  // sender: {
-  //   fontWeight: "bold",
-  //   marginBottom: 2,
-  // },
-  // inputRow: {
-  //   flexDirection: "row",
-  //   padding: 10,
-  //   borderTopWidth: 1,
-  //   borderColor: "#eee",
-  //   alignItems: "center",
-  // },
-  // input: {
-  //   flex: 1,
-  //   borderWidth: 1,
-  //   borderColor: "#ccc",
-  //   padding: 10,
-  //   marginRight: 8,
-  //   borderRadius: 6,
-  // },
   requestsContainer: {
     marginTop: 30,
     padding: 15,
@@ -665,5 +777,4 @@ const styles = StyleSheet.create({
     padding: 4,
     zIndex: 1,
   },
-  
 });

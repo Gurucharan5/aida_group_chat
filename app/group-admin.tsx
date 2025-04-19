@@ -20,13 +20,15 @@ import {
   arrayRemove,
   getDocs,
 } from "firebase/firestore";
-import { useLocalSearchParams } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { auth, db } from "../firebaseConfig";
+import { useToast } from "@/context/ToastContext";
 type BlockedUser = {
   userId: string;
   displayName: string;
 };
 export default function GroupAdmin() {
+  const { showToast } = useToast();
   const { groupId } = useLocalSearchParams<{ groupId: string }>();
   const currentUserId = auth.currentUser?.uid;
   const [joinRequests, setJoinRequests] = useState<
@@ -71,7 +73,7 @@ export default function GroupAdmin() {
     const groupDocUnsub = onSnapshot(doc(db, "groups", groupId), (docSnap) => {
       const data = docSnap.data();
       if (data?.blockedUsers) {
-        console.log(data.blockedUsers, "-------------------blocked users");
+        // console.log(data.blockedUsers, "-------------------blocked users");
         setBlockedUsers(data.blockedUsers);
       } else {
         setBlockedUsers([]);
@@ -92,8 +94,9 @@ export default function GroupAdmin() {
         displayName,
         joinedAt: Timestamp.now(),
       });
+      showToast(`${displayName} Approved!`);
       await deleteDoc(doc(db, `groups/${groupId}/joinRequests`, userId));
-      Alert.alert("User approved");
+      // Alert.alert("User approved");
     } catch (err) {
       Alert.alert("Error approving user", (err as Error).message);
     }
@@ -105,7 +108,8 @@ export default function GroupAdmin() {
       await updateDoc(doc(db, `groups/${groupId}`), {
         blockedUsers: arrayUnion({ userId, displayName }),
       });
-      Alert.alert("User blocked");
+      // Alert.alert("User blocked");
+      showToast(`${displayName} Blocked!`);
     } catch (err) {
       Alert.alert("Error blocking user", (err as Error).message);
     }
@@ -123,8 +127,8 @@ export default function GroupAdmin() {
         displayName,
         joinedAt: new Date(),
       });
-
-      Alert.alert("User unblocked and added back to members");
+      showToast(`${displayName} UnBlocked!`);
+      // Alert.alert("User unblocked and added back to members");
     } catch (err) {
       Alert.alert("Error unblocking user", (err as Error).message);
     }
@@ -151,8 +155,8 @@ export default function GroupAdmin() {
       const deletePromises = snapshot.docs.map((doc) => deleteDoc(doc.ref));
 
       await Promise.all(deletePromises);
-
-      Alert.alert("All messages deleted");
+      showToast(`All Messages Deleted!`);
+      // Alert.alert("All messages deleted");
     } catch (error) {
       console.error("Error deleting messages:", error);
       Alert.alert("Error", "Failed to delete messages");
@@ -161,7 +165,9 @@ export default function GroupAdmin() {
   const deleteGroup = async () => {
     try {
       await deleteDoc(doc(db, "groups", groupId));
-      console.log("Group deleted successfully.");
+      showToast("Group deleted Successfully!");
+      router.replace("/(tabs)");
+      // console.log("Group deleted successfully.");
       // Optionally navigate back or refresh group list
     } catch (error) {
       console.error("Error deleting group:", error);
@@ -190,7 +196,7 @@ export default function GroupAdmin() {
           borderRadius: 8,
           justifyContent: "center",
           alignItems: "center",
-          marginTop: 10
+          marginTop: 10,
         }}
         onPress={deleteGroup}
       >
@@ -205,7 +211,11 @@ export default function GroupAdmin() {
           <View key={req.userId} style={styles.card}>
             <Text>{req.displayName}</Text>
             <TouchableOpacity
-              style={{ padding: 8, backgroundColor: "#007200", borderRadius: 8 }}
+              style={{
+                padding: 8,
+                backgroundColor: "#007200",
+                borderRadius: 8,
+              }}
               onPress={() => approveUser(req.userId, req.displayName)}
             >
               <Text style={{ color: "#FFF" }}>Approve</Text>

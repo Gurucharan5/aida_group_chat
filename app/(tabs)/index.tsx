@@ -21,6 +21,10 @@ import {
   setDoc,
   doc,
   getDoc,
+  where,
+  limit,
+  getDocs,
+  Timestamp,
 } from "firebase/firestore";
 import { StatusBar } from "expo-status-bar";
 import { db, auth } from "../../firebaseConfig";
@@ -37,7 +41,7 @@ const HomeScreen = () => {
   // usePushNotifications();
 
   const [groups, setGroups] = useState<
-    { id: string; name: string; isPublic: boolean; createdBy: string }[]
+    { id: string; name: string; isPublic: boolean; createdBy: string,latestMessageTimestamp?: Timestamp}[]
   >([]);
   const [newGroupName, setNewGroupName] = useState("");
   const [membershipMap, setMembershipMap] = useState<{
@@ -59,12 +63,68 @@ const HomeScreen = () => {
   const [activeSegment, setActiveSegment] = useState("yours");
   const [loading, setLoading] = useState(false);
   const [nameModel, setNameModel] = useState(false);
+  const [unseenMessages, setUnseenMessages] = useState<Record<string, number>>(
+    {}
+  );
+  // const currentUserId = auth.currentUser?.uid;
   useEffect(() => {
     if (!navigationState?.key) return;
     if (!user) {
       router.replace("/login");
     }
   }, [user, navigationState]);
+
+  useEffect(() => {
+    const unsubscribes: (() => void)[] = [];
+
+    const listenToUnseenCounts = async () => {
+      const currentUserId = auth.currentUser?.uid;
+      if (!currentUserId) return;
+
+      for (let group of groups) {
+        const groupId = group.id;
+
+        // Get lastSeen timestamp for the current user in this group
+        const memberRef = doc(db, "groups", groupId, "members", currentUserId);
+        const memberSnap = await getDoc(memberRef);
+        const lastSeen = memberSnap.exists()
+          ? memberSnap.data().lastSeen.toDate()
+          : null;
+
+        const messagesRef = collection(db, "groups", groupId, "messages");
+
+        let q = query(messagesRef, orderBy("createdAt", "asc"));
+
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+          let unseenCount = 0;
+
+          snapshot.forEach((doc) => {
+            const message = doc.data();
+            const msgTime = message.createdAt?.toDate();
+
+            if (lastSeen && msgTime && msgTime > lastSeen) {
+              unseenCount++;
+            }
+          });
+
+          setUnseenMessages((prev) => ({
+            ...prev,
+            [groupId]: unseenCount,
+          }));
+
+          // console.log(`Unseen for ${group.name}:`, unseenCount);
+        });
+
+        unsubscribes.push(unsubscribe);
+      }
+    };
+
+    listenToUnseenCounts();
+
+    return () => {
+      unsubscribes.forEach((unsub) => unsub());
+    };
+  }, [groups]);
   useEffect(() => {
     setLoading(true);
     const user = auth.currentUser;
@@ -185,51 +245,6 @@ const HomeScreen = () => {
     }
   };
 
-  const joinPublicGroup = async (groupId: string, groupName: string) => {
-    const userId = auth.currentUser?.uid;
-    if (!userId) return;
-    try {
-      const requestRef = doc(db, `groups/${groupId}/members`, userId);
-      await setDoc(requestRef, {
-        userId,
-        requestedAt: new Date(),
-      });
-
-      // Alert.alert("Added Successfully.");
-      setAlertTitle("Joining Group");
-      setAlertMessage("Added Successfully.");
-      setAlertVisible(true);
-      router.push({
-        pathname: "/chatroom",
-        params: { id: groupId, name: groupName },
-      });
-    } catch (error) {
-      Alert.alert("Error", (error as Error).message);
-    }
-  };
-
-  const requestToJoinPrivateGroup = async (groupId: string) => {
-    const user = auth.currentUser;
-    if (!user) return;
-
-    const { uid: userId, displayName } = user;
-
-    try {
-      const requestRef = doc(db, `groups/${groupId}/joinRequests`, userId);
-      await setDoc(requestRef, {
-        userId,
-        displayName: displayName,
-        requestedAt: new Date(),
-      });
-
-      // Alert.alert("Join request sent. Please wait for admin approval.");
-      setAlertTitle("Join request sent");
-      setAlertMessage("Please wait for admin approval.");
-      setAlertVisible(true);
-    } catch (error) {
-      Alert.alert("Error", (error as Error).message);
-    }
-  };
   // Step 1: Define the checkMembership function inside your component
   const checkMembership = async (groupId: string): Promise<boolean> => {
     const docRef = doc(
@@ -240,91 +255,7 @@ const HomeScreen = () => {
     return snap.exists();
   };
 
-  // const goToChat = async (groupId: string, groupName: string) => {
-  //   setLoading(true);
-  //   const selectedGroup = groups.find((g) => g.id === groupId);
-  //   const groupRef = doc(db, "groups", groupId);
-  //   const groupSnap = await getDoc(groupRef);
-
-  //   if (!groupSnap.exists()) {
-
-  //     setLoading(false);
-  //     setAlertTitle("Group not found");
-  //     setAlertMessage("The group you are trying to access does not exist.");
-  //     setAlertVisible(true); // Show custom alert
-  //     return;
-  //   }
-
-  //   const groupData = groupSnap.data();
-  //   const currentUserId = auth.currentUser?.uid;
-  //   const isAdmin = groupData.createdBy === currentUserId;
-  //   const isBlocked = groupData.blockedUsers?.some(
-  //     (user: { userId: string; displayName: string }) => user.userId === currentUserId
-  //   );
-  //   if (!currentUserId) {
-
-  //     setLoading(false);
-  //     setAlertTitle("Authentication error");
-  //     setAlertMessage("You must be logged in to join the group.");
-  //     setAlertVisible(true); // Show custom alert
-  //     return;
-  //   }
-
-  //   const memberDocRef = doc(db, `groups/${groupId}/members`, currentUserId);
-  //   const memberSnap = await getDoc(memberDocRef);
-  //   if (groupData.isPublic && !memberSnap.exists() && !isAdmin) {
-
-  //     setLoading(false);
-  //     setAlertTitle("Group Joining");
-  //     setAlertMessage("Please Join Group first.");
-  //     setAlertVisible(true);
-  //     return;
-  //   }
-  //   if (
-  //     !groupData.isPublic &&
-  //     !memberSnap.exists() &&
-  //     !isAdmin &&
-  //     !isBlocked
-  //   ) {
-  //     setLoading(false);
-  //     setAlertTitle("Join request pending");
-  //     setAlertMessage(
-  //       "You must be approved by the group admin to join this private group."
-  //     );
-  //     setAlertVisible(true);
-  //     return;
-  //   }
-
-  //   if (isBlocked) {
-  //     setLoading(false);
-  //     setAlertTitle("Access Denied");
-  //     setAlertMessage("You have been blocked from this group.");
-  //     setAlertVisible(true);
-  //     return;
-  //   }
-  //   setLoading(false);
-  //   router.push({
-  //     pathname: "/chatroom",
-  //     params: {
-  //       id: groupId,
-  //       name: groupName,
-  //       createdBy: selectedGroup?.createdBy,
-  //     },
-  //   });
-  // };
-
   const goToChat = async (groupId: string, groupName: string) => {
-    setLoading(true);
-    const currentUserId = auth.currentUser?.uid;
-
-    if (!currentUserId) {
-      setLoading(false);
-      setAlertTitle("Authentication error");
-      setAlertMessage("You must be logged in to join the group.");
-      setAlertVisible(true);
-      return;
-    }
-
     const selectedGroup = groups.find((g) => g.id === groupId);
     if (!selectedGroup) {
       setLoading(false);
@@ -334,59 +265,6 @@ const HomeScreen = () => {
       return;
     }
 
-    // Fetch group + member data in parallel
-    const groupRef = doc(db, "groups", groupId);
-    const memberDocRef = doc(db, `groups/${groupId}/members`, currentUserId);
-    const [groupSnap, memberSnap] = await Promise.all([
-      getDoc(groupRef),
-      getDoc(memberDocRef),
-    ]);
-
-    if (!groupSnap.exists()) {
-      setLoading(false);
-      setAlertTitle("Group not found");
-      setAlertMessage("The group you are trying to access does not exist.");
-      setAlertVisible(true);
-      return;
-    }
-
-    const groupData = groupSnap.data();
-    const isAdmin = groupData.createdBy === currentUserId;
-
-    const isBlocked = groupData.blockedUsers?.some(
-      (user: { userId: string; displayName: string }) =>
-        user.userId === currentUserId
-    );
-
-    if (isBlocked) {
-      setLoading(false);
-      setAlertTitle("Access Denied");
-      setAlertMessage("You have been blocked from this group.");
-      setAlertVisible(true);
-      return;
-    }
-
-    const isMember = memberSnap.exists();
-
-    if (groupData.isPublic && !isMember && !isAdmin) {
-      setLoading(false);
-      setAlertTitle("Group Joining");
-      setAlertMessage("Please Join Group first.");
-      setAlertVisible(true);
-      return;
-    }
-
-    if (!groupData.isPublic && !isMember && !isAdmin) {
-      setLoading(false);
-      setAlertTitle("Join request pending");
-      setAlertMessage(
-        "You must be approved by the group admin to join this private group."
-      );
-      setAlertVisible(true);
-      return;
-    }
-
-    setLoading(false);
     router.push({
       pathname: "/chatroom",
       params: {
@@ -511,13 +389,19 @@ const HomeScreen = () => {
       )}
       <FlatList
         // data={groups}
-        data={
-          activeSegment === "yours"
-            ? groups.filter(
-                (group) =>
-                  membershipMap[group.id] || group.createdBy === currentUserId
-              )
-            : groups
+        data={(activeSegment === "yours"
+          ? groups.filter(
+              (group) =>
+                membershipMap[group.id] || group.createdBy === currentUserId
+            )
+          : groups
+        )
+          // .slice() // Make a copy so we don't mutate the original array
+          // .sort((a:any, b:any) => {
+          //   const timeA = a.latestMessageTimestamp?.toMillis?.() || 0;
+          //   const timeB = b.latestMessageTimestamp?.toMillis?.() || 0;
+          //   return timeB - timeA; // descending (latest first)
+          // })
         }
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => {
@@ -525,52 +409,78 @@ const HomeScreen = () => {
           const isMember = membershipMap[item.id];
           // const isMember = item.members?.includes(currentUserId);
           const isAdmin = item.createdBy === currentUserId;
-
+          const unseenCount = unseenMessages[item.id] || 0;
+          // console.log(`Unseen count for ${item.id}: ${unseenCount}`);
           return (
             <TouchableOpacity
               onPress={() => goToChat(item.id, item.name)}
-              style={[styles.groupCard, { backgroundColor: ListColor }]}
+              style={{
+                marginHorizontal: 5,
+                marginVertical: 2,
+                backgroundColor: ListColor,
+                borderRadius: 16,
+                padding: 16,
+                position: "relative",
+                shadowColor: "#000",
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.1,
+                shadowRadius: 6,
+                elevation: 3,
+              }}
             >
-              <View style={styles.groupHeader}>
-                <Text style={[styles.groupName, { color: TextColor }]}>
-                  {item.name}
-                </Text>
+              {/* Group Name */}
+              <Text
+                style={{ fontSize: 18, fontWeight: "600", color: TextColor }}
+              >
+                {item.name}
+              </Text>
+
+              {/* Bottom Row: Public/Private Tag + Action Button */}
+              <View
+                style={{
+                  flexDirection: "row",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  marginTop: 5,
+                }}
+              >
                 <View
-                  style={[
-                    styles.badge,
-                    { backgroundColor: isPublic ? "#4caf50" : "#f44336" },
-                  ]}
+                  style={{
+                    backgroundColor: isPublic ? "#4caf50" : "#f44336",
+                    borderRadius: 8,
+                    paddingHorizontal: 10,
+                    paddingVertical: 4,
+                  }}
                 >
-                  <Text style={styles.badgeText}>
+                  <Text style={{ color: "#fff", fontSize: 10 }}>
                     {isPublic ? "Public" : "Private"}
                   </Text>
                 </View>
               </View>
 
-              <View style={styles.buttonContainer}>
-                {isMember || isAdmin ? (
-                  <TouchableOpacity
-                    onPress={() => goToChat(item.id, item.name)}
-                    style={styles.joinButton}
+              {/* Unseen Messages Badge */}
+              {unseenCount > 0 && (
+                <View
+                  style={{
+                    position: "absolute",
+                    top: 10,
+                    right: 10,
+                    backgroundColor: "#ff3b30",
+                    borderRadius: 999,
+                    paddingHorizontal: 8,
+                    paddingVertical: 3,
+                    minWidth: 22,
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <Text
+                    style={{ color: "#fff", fontSize: 12, fontWeight: "bold" }}
                   >
-                    <Text style={styles.joinButtonText}>Enter Group</Text>
-                  </TouchableOpacity>
-                ) : isPublic ? (
-                  <TouchableOpacity
-                    onPress={() => joinPublicGroup(item.id, item.name)}
-                    style={styles.joinButton}
-                  >
-                    <Text style={styles.joinButtonText}>Join Group</Text>
-                  </TouchableOpacity>
-                ) : (
-                  <TouchableOpacity
-                    onPress={() => requestToJoinPrivateGroup(item.id)}
-                    style={styles.requestButton}
-                  >
-                    <Text style={styles.requestButtonText}>Request Access</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
+                    {unseenCount}
+                  </Text>
+                </View>
+              )}
             </TouchableOpacity>
           );
         }}
@@ -800,6 +710,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#e0e0e0",
     borderRadius: 8,
     overflow: "hidden",
+    marginBottom: 5,
   },
   segmentButton: {
     flex: 1,
@@ -822,5 +733,20 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0,0,0,0.5)",
     justifyContent: "center",
     alignItems: "center",
+  },
+  unseenBadge: {
+    backgroundColor: "red",
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    justifyContent: "center",
+    alignItems: "center",
+    position: "absolute",
+    top: 10,
+    right: 10,
+  },
+  unseenBadgeText: {
+    color: "#fff",
+    fontSize: 12,
   },
 });
