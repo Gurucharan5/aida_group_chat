@@ -13,7 +13,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/AidaLogo.png",
+        "foregroundImage": "./assets/images/NewAidaLogo.png",
         "backgroundColor": "#ffffff"
       },
       "package": "com.gcenterprise.groupchatapp",
@@ -30,7 +30,7 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/AidaLogo.png",
+          "image": "./assets/images/NewAidaLogo.png",
           "imageWidth": 200,
           "resizeMode": "contain",
           "backgroundColor": "#ffffff"
