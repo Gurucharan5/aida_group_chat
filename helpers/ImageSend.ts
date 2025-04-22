@@ -33,7 +33,7 @@ export const pickAndUploadImage = async (): Promise<string | null> => {
       name: "upload.jpg",
     } as any);
     formData.append("upload_preset", UPLOAD_PRESET);
-    console.log(formData,"------------------")
+    // console.log(formData,"------------------")
     // Upload to Cloudinary
     const response = await fetch(CLOUDINARY_URL, {
       method: "POST",
@@ -41,7 +41,7 @@ export const pickAndUploadImage = async (): Promise<string | null> => {
     });
 
     const data = await response.json();
-    console.log(data,"=========================")
+    // console.log(data,"=========================")
     return data.secure_url; // ✅ URL of the uploaded image
   } catch (error) {
     console.error("Upload error:", error);

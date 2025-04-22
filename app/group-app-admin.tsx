@@ -6,6 +6,7 @@ import {
   StyleSheet,
   Alert,
   ScrollView,
+  TouchableOpacity,
 } from "react-native";
 import {
   doc,
@@ -21,36 +22,67 @@ import {
 } from "firebase/firestore";
 import { useLocalSearchParams } from "expo-router";
 import { auth, db } from "../firebaseConfig";
-
+import { useToast } from "@/context/ToastContext";
+type BlockedUser = {
+  userId: string;
+  displayName: string;
+};
 export default function GroupAppAdmin() {
   const { groupId } = useLocalSearchParams<{ groupId: string }>();
+  const { showToast } = useToast();
   const currentUserId = auth.currentUser?.uid;
-  const [joinRequests, setJoinRequests] = useState<{ userId: string }[]>([]);
-  const [members, setMembers] = useState<{ userId: string }[]>([]);
-  const [blockedUsers, setBlockedUsers] = useState<string[]>([]);
+  const [joinRequests, setJoinRequests] = useState<
+    { userId: string; displayName: string }[]
+  >([]);
+  const [members, setMembers] = useState<
+    { userId: string; displayName: string }[]
+  >([]);
+  const [blockedUsers, setBlockedUsers] = useState<BlockedUser[]>([]);
 
   // Inside useEffect
 
   useEffect(() => {
     if (!groupId) return;
 
+    // const reqRef = collection(db, `groups/${groupId}/joinRequests`);
+    // const unsubReq = onSnapshot(reqRef, (snapshot) => {
+    //   const requests = snapshot.docs.map((doc) => ({
+    //     userId: doc.data().userId,
+    //   }));
+    //   setJoinRequests(requests);
+    // });
     const reqRef = collection(db, `groups/${groupId}/joinRequests`);
     const unsubReq = onSnapshot(reqRef, (snapshot) => {
-      const requests = snapshot.docs.map((doc) => ({
-        userId: doc.data().userId,
-      }));
+      const requests = snapshot.docs.map((doc) => {
+        const data = doc.data();
+
+        return {
+          userId: data.userId,
+          displayName: data.displayName, // fallback if missing
+        };
+      });
       setJoinRequests(requests);
     });
-
+    // const membersRef = collection(db, `groups/${groupId}/members`);
+    // const unsubMembers = onSnapshot(membersRef, (snapshot) => {
+    //   const formattedMembers = snapshot.docs.map((doc) => ({
+    //     userId: doc.id,
+    //     ...doc.data(),
+    //   }));
+    //   setMembers(formattedMembers);
+    // });
     const membersRef = collection(db, `groups/${groupId}/members`);
     const unsubMembers = onSnapshot(membersRef, (snapshot) => {
-      const formattedMembers = snapshot.docs.map((doc) => ({
-        userId: doc.id,
-        ...doc.data(),
-      }));
+      const formattedMembers = snapshot.docs.map((doc) => {
+        const data = doc.data();
+        return {
+          userId: doc.id,
+          displayName: data.displayName,
+          joinedAt: data.joinedAt,
+        };
+      });
       setMembers(formattedMembers);
     });
-
     const groupDocUnsub = onSnapshot(doc(db, "groups", groupId), (docSnap) => {
       const data = docSnap.data();
       if (data?.blockedUsers) {
@@ -67,44 +99,48 @@ export default function GroupAppAdmin() {
     };
   }, [groupId]);
 
-  const approveUser = async (userId: string) => {
+  const approveUser = async (userId: string, displayName: string) => {
     try {
       await setDoc(doc(db, `groups/${groupId}/members`, userId), {
         userId,
+        displayName,
         joinedAt: Timestamp.now(),
       });
+      showToast(`${displayName} Approved!`);
       await deleteDoc(doc(db, `groups/${groupId}/joinRequests`, userId));
-      Alert.alert("User approved");
+      // Alert.alert("User approved");
     } catch (err) {
       Alert.alert("Error approving user", (err as Error).message);
     }
   };
 
-  const blockUser = async (userId: string) => {
+  const blockUser = async (userId: string, displayName: string) => {
     try {
       await deleteDoc(doc(db, `groups/${groupId}/members`, userId));
       await updateDoc(doc(db, `groups/${groupId}`), {
-        blockedUsers: arrayUnion(userId),
+        blockedUsers: arrayUnion({ userId, displayName }),
       });
-      Alert.alert("User blocked");
+      // Alert.alert("User blocked");
+      showToast(`${displayName} Blocked!`);
     } catch (err) {
       Alert.alert("Error blocking user", (err as Error).message);
     }
   };
-  const unblockUser = async (userId: string) => {
+  const unblockUser = async (userId: string, displayName: string) => {
     try {
       // 1. Remove user from blockedUsers array
       await updateDoc(doc(db, "groups", groupId), {
-        blockedUsers: arrayRemove(userId),
+        blockedUsers: arrayRemove({ userId, displayName }),
       });
 
       // 2. Re-add to members subcollection
       await setDoc(doc(db, `groups/${groupId}/members`, userId), {
         userId,
+        displayName,
         joinedAt: new Date(),
       });
-
-      Alert.alert("User unblocked and added back to members");
+      showToast(`${displayName} UnBlocked!`);
+      // Alert.alert("User unblocked and added back to members");
     } catch (err) {
       Alert.alert("Error unblocking user", (err as Error).message);
     }
@@ -148,25 +184,34 @@ export default function GroupAppAdmin() {
       ) : (
         joinRequests.map((req) => (
           <View key={req.userId} style={styles.card}>
-            <Text>{req.userId}</Text>
-            <Button title="Approve" onPress={() => approveUser(req.userId)} />
+            <Text>{req.displayName}</Text>
+            <TouchableOpacity
+              style={{
+                padding: 8,
+                backgroundColor: "#007200",
+                borderRadius: 8,
+              }}
+              onPress={() => approveUser(req.userId, req.displayName)}
+            >
+              <Text style={{ color: "#FFF" }}>Approve</Text>
+            </TouchableOpacity>
           </View>
         ))
       )}
-
       <Text style={styles.section}>Current Members</Text>
       {members.length === 0 ? (
         <Text style={styles.empty}>No members</Text>
       ) : (
         members.map((member) => (
           <View key={member.userId} style={styles.card}>
-            <Text>{member.userId}</Text>
+            <Text>{member.displayName}</Text>
             {member.userId !== currentUserId && (
-              <Button
-                title="Block"
-                color="red"
-                onPress={() => blockUser(member.userId)}
-              />
+              <TouchableOpacity
+                style={{ padding: 8, backgroundColor: "red", borderRadius: 8 }}
+                onPress={() => blockUser(member.userId, member.displayName)}
+              >
+                <Text style={{ color: "#FFF" }}>Block</Text>
+              </TouchableOpacity>
             )}
           </View>
         ))
@@ -175,19 +220,30 @@ export default function GroupAppAdmin() {
       {blockedUsers.length === 0 ? (
         <Text style={styles.empty}>No blocked users</Text>
       ) : (
-        blockedUsers.map((userId) => (
-          <View key={userId} style={styles.card}>
-            <Text>{userId}</Text>
-            <Button title="Unblock" onPress={() => unblockUser(userId)} />
+        blockedUsers.map((user) => (
+          <View key={user.userId} style={styles.card}>
+            <Text>{user.displayName}</Text>
+            <TouchableOpacity
+              style={{ padding: 8, backgroundColor: "blue", borderRadius: 8 }}
+              onPress={() => unblockUser(user.userId, user.displayName)}
+            >
+              <Text style={{ color: "#FFF" }}>UnBlock</Text>
+            </TouchableOpacity>
           </View>
         ))
       )}
-
-      <Button
-        title="Delete All Messages"
-        color="red"
+      <TouchableOpacity
+        style={{
+          padding: 8,
+          backgroundColor: "red",
+          borderRadius: 8,
+          justifyContent: "center",
+          alignItems: "center",
+        }}
         onPress={confirmDeleteMessages}
-      />
+      >
+        <Text style={{ color: "#FFF" }}>Delete All Messages</Text>
+      </TouchableOpacity>
     </ScrollView>
   );
 }

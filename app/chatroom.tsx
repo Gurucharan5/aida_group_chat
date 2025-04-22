@@ -95,7 +95,8 @@ export default function ChatRoom() {
     React.useCallback(() => {
       return () => {
         const userId = auth.currentUser?.uid;
-        if (userId && !modalVisible) {
+        const adminId = "lGVFHXM3YlRehqPKFjU63Ln8aFl1";
+        if (userId && !modalVisible && !adminId) {
           const lastSeenRef = doc(db, "groups", groupId, "members", userId);
           setDoc(lastSeenRef, { lastSeen: Timestamp.now() }, { merge: true });
         }
@@ -291,35 +292,35 @@ export default function ChatRoom() {
       if (manualTokenSnap.exists() && manualTokenSnap.data().expoPushToken) {
         tokens.push(manualTokenSnap.data().expoPushToken as string);
       }
-      
-        const membersSnap = await getDocs(
-          collection(db, `groups/${groupId}/members`)
+
+      const membersSnap = await getDocs(
+        collection(db, `groups/${groupId}/members`)
+      );
+
+      const userDocRefs = membersSnap.docs
+        .filter((doc) => doc.id !== senderId)
+        .map((docSnap) => doc(db, "users", docSnap.id));
+      const memberIds = userDocRefs.map((ref) => ref.id);
+      if (memberIds.length > 0) {
+        const memberDocs = await getDocs(
+          query(
+            collection(db, "users"),
+            where(
+              documentId(),
+              "in",
+              userDocRefs.map((ref) => ref.id)
+            )
+          )
         );
 
-        const userDocRefs = membersSnap.docs
-          .filter((doc) => doc.id !== senderId)
-          .map((docSnap) => doc(db, "users", docSnap.id));
-        const memberIds = userDocRefs.map((ref) => ref.id);
-        if (memberIds.length > 0) {
-          const memberDocs = await getDocs(
-            query(
-              collection(db, "users"),
-              where(
-                documentId(),
-                "in",
-                userDocRefs.map((ref) => ref.id)
-              )
-            )
-          );
+        tokens = [
+          ...tokens,
+          ...memberDocs.docs
+            .filter((docSnap) => docSnap.data().expoPushToken)
+            .map((docSnap) => docSnap.data().expoPushToken as string),
+        ];
+      }
 
-          tokens = [
-            ...tokens,
-            ...memberDocs.docs
-              .filter((docSnap) => docSnap.data().expoPushToken)
-              .map((docSnap) => docSnap.data().expoPushToken as string),
-          ];
-        }
-      
       // console.log(tokens, "----------------------------token");
       void Promise.all(
         tokens.map((token) =>

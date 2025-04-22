@@ -7,7 +7,14 @@ import {
   Alert,
 } from "react-native";
 import React, { useEffect, useState } from "react";
-import { collection, doc, getDoc, onSnapshot, orderBy, query } from "firebase/firestore";
+import {
+  collection,
+  doc,
+  getDoc,
+  onSnapshot,
+  orderBy,
+  query,
+} from "firebase/firestore";
 import { auth, db } from "@/firebaseConfig";
 import { router } from "expo-router";
 
@@ -43,33 +50,6 @@ const AdminDashboard = () => {
 
     const groupData = groupSnap.data();
     const currentUserId = auth.currentUser?.uid;
-    // const isAdmin = groupData.createdBy === currentUserId;
-
-    // const memberDocRef = doc(
-    //   db,
-    //   `groups/${groupId}/members`,
-    //   currentUserId || ""
-    // );
-    // const memberSnap = await getDoc(memberDocRef);
-
-    // if (
-    //   !groupData.isPublic &&
-    //   !memberSnap.exists() &&
-    //   !isAdmin &&
-    //   !groupData.blockedUsers?.includes(currentUserId)
-    // ) {
-    //   Alert.alert(
-    //     "Join request pending",
-    //     "You must be approved by the group admin to join this private group."
-    //   );
-    //   return;
-    // }
-
-    // if (groupData.blockedUsers?.includes(currentUserId)) {
-    //   Alert.alert("Access Denied", "You have been blocked from this group.");
-    //   return;
-    // }
-
     router.push({
       pathname: "/chatroom",
       params: {
@@ -82,6 +62,20 @@ const AdminDashboard = () => {
   return (
     <View style={styles.container}>
       <Text>AdminDashboard</Text>
+      <TouchableOpacity
+        style={{
+          padding: 10,
+          backgroundColor: "blue",
+          borderRadius: 8,
+          justifyContent: "center",
+          alignItems: "center",
+        }}
+        onPress={()=>{
+          router.push("/admin/random")
+        }}
+      >
+        <Text style={{ color: "#FFF" }}>Random Chats Page</Text>
+      </TouchableOpacity>
       <FlatList
         data={groups}
         keyExtractor={(item) => item.id}

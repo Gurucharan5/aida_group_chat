@@ -41,7 +41,13 @@ const HomeScreen = () => {
   // usePushNotifications();
 
   const [groups, setGroups] = useState<
-    { id: string; name: string; isPublic: boolean; createdBy: string,latestMessageTimestamp?: Timestamp}[]
+    {
+      id: string;
+      name: string;
+      isPublic: boolean;
+      createdBy: string;
+      latestMessageTimestamp?: Timestamp;
+    }[]
   >([]);
   const [newGroupName, setNewGroupName] = useState("");
   const [membershipMap, setMembershipMap] = useState<{
@@ -66,6 +72,10 @@ const HomeScreen = () => {
   const [unseenMessages, setUnseenMessages] = useState<Record<string, number>>(
     {}
   );
+  const [unseenRandomMessages, setUnseenRandomMessages] = useState<
+    Record<string, number>
+  >({});
+  // const [unseenCount, setunseenCount] = useState(0)
   // const currentUserId = auth.currentUser?.uid;
   useEffect(() => {
     if (!navigationState?.key) return;
@@ -73,6 +83,52 @@ const HomeScreen = () => {
       router.replace("/login");
     }
   }, [user, navigationState]);
+  useEffect(() => {
+    let unsubscribe: (() => void) | null = null;
+
+    const listenToUnseenMessages = async () => {
+      const currentUserId = auth.currentUser?.uid;
+      if (!currentUserId) return;
+
+      const randomChatRef = doc(db, "random_chat", currentUserId);
+      const randomChatSnap = await getDoc(randomChatRef);
+
+      const lastSeen = randomChatSnap.exists()
+        ? randomChatSnap.data().lastSeen?.toDate?.()
+        : null;
+
+      const messagesRef = collection(
+        db,
+        "random_chat",
+        currentUserId,
+        "messages"
+      );
+      const q = query(messagesRef, orderBy("timestamp", "asc"));
+
+      unsubscribe = onSnapshot(q, (snapshot) => {
+        let unseenCount = 0;
+
+        snapshot.forEach((doc) => {
+          const msg = doc.data();
+          const msgTime = msg.timestamp?.toDate?.();
+          if (lastSeen && msgTime && msgTime > lastSeen) {
+            unseenCount++;
+          }
+        });
+
+        setUnseenRandomMessages((prev) => ({
+          ...prev,
+          [currentUserId]: unseenCount,
+        })); // Update your state here
+      });
+    };
+
+    listenToUnseenMessages();
+
+    return () => {
+      if (unsubscribe) unsubscribe();
+    };
+  }, [currentUserId]);
 
   useEffect(() => {
     const unsubscribes: (() => void)[] = [];
@@ -301,6 +357,7 @@ const HomeScreen = () => {
     await updateProfile(currentUser, { displayName: username.trim() });
     setNameModel(false);
   };
+  const unseenRandomCount = unseenRandomMessages[currentUserId || ""] || 0;
   return (
     <View style={[styles.container, { backgroundColor: BackgroundColor }]}>
       <StatusBar style="light" />
@@ -387,15 +444,83 @@ const HomeScreen = () => {
           style={{ marginTop: 20 }}
         />
       )}
+      <TouchableOpacity
+        onPress={() => {
+          router.push("/randomChat");
+        }}
+        style={{
+          marginHorizontal: 5,
+          marginVertical: 2,
+          backgroundColor: ListColor,
+          borderRadius: 16,
+          padding: 16,
+          position: "relative",
+          shadowColor: "#000",
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.1,
+          shadowRadius: 6,
+          elevation: 3,
+        }}
+      >
+        {/* Group Name */}
+        <Text style={{ fontSize: 18, fontWeight: "600", color: TextColor }}>
+          Random Chat
+        </Text>
+
+        {/* Bottom Row: Public/Private Tag + Action Button */}
+        <View
+          style={{
+            flexDirection: "row",
+            justifyContent: "space-between",
+            alignItems: "center",
+            marginTop: 5,
+          }}
+        >
+          <View
+            style={{
+              backgroundColor: "#4caf50",
+              borderRadius: 8,
+              paddingHorizontal: 10,
+              paddingVertical: 4,
+            }}
+          >
+            <Text style={{ color: "#fff", fontSize: 10 }}>
+              Open for Everyone
+            </Text>
+          </View>
+        </View>
+
+        {/* Unseen Messages Badge */}
+        {unseenRandomCount > 0 && (
+          <View
+            style={{
+              position: "absolute",
+              top: 10,
+              right: 10,
+              backgroundColor: "#ff3b30",
+              borderRadius: 999,
+              paddingHorizontal: 8,
+              paddingVertical: 3,
+              minWidth: 22,
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <Text style={{ color: "#fff", fontSize: 12, fontWeight: "bold" }}>
+              {unseenRandomCount}
+            </Text>
+          </View>
+        )}
+      </TouchableOpacity>
       <FlatList
         // data={groups}
-        data={(activeSegment === "yours"
-          ? groups.filter(
-              (group) =>
-                membershipMap[group.id] || group.createdBy === currentUserId
-            )
-          : groups
-        )
+        data={
+          activeSegment === "yours"
+            ? groups.filter(
+                (group) =>
+                  membershipMap[group.id] || group.createdBy === currentUserId
+              )
+            : groups
           // .slice() // Make a copy so we don't mutate the original array
           // .sort((a:any, b:any) => {
           //   const timeA = a.latestMessageTimestamp?.toMillis?.() || 0;
@@ -718,7 +843,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   activeSegment: {
-    backgroundColor: "#6200ee",
+    backgroundColor: "#0077b6",
   },
   activeText: {
     color: "#fff",
