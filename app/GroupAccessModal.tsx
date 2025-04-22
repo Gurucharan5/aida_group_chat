@@ -76,7 +76,7 @@ const GroupAccessModal: React.FC<Props> = ({
 
         const groupData = groupSnap.data();
         const isAdmin = groupData.createdBy === currentUserId;
-        const AppAdmin = "lGVFHXM3YlRehqPKFjU63Ln8aFl1";
+        const AppAdmin = currentUserId === "lGVFHXM3YlRehqPKFjU63Ln8aFl1" ? true : false;
         const isBlocked = groupData.blockedUsers?.some(
           (user: { userId: string }) => user.userId === currentUserId
         );
