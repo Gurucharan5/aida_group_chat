@@ -24,7 +24,15 @@
 // }
 
 // export default explore
-import { View, Text, Button, StyleSheet, TouchableOpacity, TextInput } from "react-native";
+import {
+  View,
+  Text,
+  Button,
+  StyleSheet,
+  TouchableOpacity,
+  TextInput,
+  ScrollView,
+} from "react-native";
 import React, { useEffect, useState } from "react";
 import { useRouter } from "expo-router";
 import { useAuth } from "@/context/AuthContext";
@@ -34,14 +42,15 @@ import { StatusBar } from "expo-status-bar";
 import { doc, getDoc, updateDoc } from "firebase/firestore";
 import { auth, db } from "@/firebaseConfig";
 import { getAuth, updateProfile } from "firebase/auth";
+import { ThemeSelector } from "@/components/ThemeSelector";
 
 const Explore = () => {
   const { user, logout } = useAuth();
   const router = useRouter();
-  const { isDark } = useTheme();
-  const BackgroundColor = isDark ? "#000000" : "#FFFFFF";
-  const TextColor = isDark ? "#FFFFFF" : "#000000";
-  const ListColor = isDark ? "#4A5c6A" : "#9BA8AB";
+  const { themeConfig } = useTheme();
+  const BackgroundColor = themeConfig.background;
+  const TextColor = themeConfig.text;
+  const ListColor = themeConfig.tab;
   const [username, setUsername] = useState("");
   const [isEditing, setIsEditing] = useState(false);
   const [newName, setNewName] = useState("");
@@ -102,11 +111,20 @@ const Explore = () => {
   }, [user]);
 
   return (
-    <View style={[styles.container, { backgroundColor: BackgroundColor ,paddingTop: 50}]}>
+    <ScrollView
+      style={[styles.container, { backgroundColor: BackgroundColor }]}
+      contentContainerStyle={{
+        justifyContent: "flex-start",
+        paddingTop: 50,
+        paddingBottom: 50,
+      }}
+      showsVerticalScrollIndicator={false}
+    >
       <StatusBar style="light" />
-      <Text style={[styles.heading,{color: TextColor,marginBottom: 10}]}>Settings</Text>
+      <Text style={[styles.heading, { color: TextColor, marginBottom: 10 }]}>
+        Settings
+      </Text>
 
-      
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Disclaimer</Text>
         <Text style={styles.disclaimerText}>
@@ -116,12 +134,14 @@ const Explore = () => {
           and activity. By using this app, you agree to our Terms and Policies.
         </Text>
       </View>
-      <View style={[styles.cardContainer,{marginTop: 10}]}>
-        <View style={[styles.card, { backgroundColor: ListColor }]}>
-          <Text style={[styles.cardTitle,{color: TextColor}]}>Username</Text>
+      <View style={[styles.cardContainer, { marginTop: 10 }]}>
+        <View style={[styles.card, { backgroundColor: BackgroundColor }]}>
+          <Text style={[styles.cardTitle, { color: TextColor }]}>Username</Text>
           {!isEditing ? (
             <>
-              <Text style={[styles.cardSubtitle,{color: TextColor}]}>{username || "No username set"}</Text>
+              <Text style={[styles.cardSubtitle, { color: TextColor }]}>
+                {username || "No username set"}
+              </Text>
               <TouchableOpacity onPress={handleEdit}>
                 <Text style={styles.editButton}>Edit</Text>
               </TouchableOpacity>
@@ -129,7 +149,7 @@ const Explore = () => {
           ) : (
             <>
               <TextInput
-                style={[styles.input,{color: TextColor}]}
+                style={[styles.input, { color: TextColor }]}
                 value={newName}
                 onChangeText={setNewName}
                 placeholderTextColor={TextColor}
@@ -142,10 +162,11 @@ const Explore = () => {
           )}
         </View>
       </View>
+      <ThemeSelector />
       <TouchableOpacity style={styles.logoutButton} onPress={logout}>
         <Text style={styles.logoutText}>Logout</Text>
       </TouchableOpacity>
-    </View>
+    </ScrollView>
   );
 };
 
@@ -155,7 +176,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     padding: 20,
-    justifyContent: "flex-start",
+    // justifyContent: "flex-start",
   },
   heading: {
     fontSize: 26,
