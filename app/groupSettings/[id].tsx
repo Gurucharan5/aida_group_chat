@@ -413,7 +413,26 @@ export default function GroupSettings() {
     }, 100); // Delay to allow alert to render first
   };
 
-  if (!group) return <Text>Loading...</Text>;
+  if (!group)
+    return (
+      <BlurView
+        intensity={50}
+        tint="light"
+        style={{
+          ...StyleSheet.absoluteFillObject,
+          zIndex: 10,
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <LottieView
+          source={require("@/assets/loading.json")}
+          style={{ width: 100, height: 100 }}
+          autoPlay
+          loop
+        />
+      </BlurView>
+    );
 
   return (
     <View style={styles.container}>

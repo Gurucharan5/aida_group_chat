@@ -1341,6 +1341,7 @@ const Index = () => {
   const [alertVisible, setAlertVisible] = useState(false);
   const [alertTitle, setAlertTitle] = useState("");
   const [alertMessage, setAlertMessage] = useState("");
+  const [requestingjoining, setRequestingJoining] = useState(false);
 
   const closeAlert = () => {
     setAlertVisible(false);
@@ -1497,7 +1498,7 @@ const Index = () => {
   };
 
   const renderItem = ({ item }: { item: Group }) => {
-    console.log(item, "-----------------renderItem");
+    // console.log(item, "-----------------renderItem");
     const isMember = item.members?.includes(user?.uid ?? "");
     const time = item.lastMessage?.timestamp
       ?.toDate?.()
@@ -1517,9 +1518,15 @@ const Index = () => {
           <Text style={[styles.chatName, { color: TextColor }]}>
             {item.name || "Unnamed Group"}
           </Text>
-          <Text style={styles.chatMessage} numberOfLines={1}>
-            {item.lastMessage?.text || "No messages yet"}
-          </Text>
+          {item.type === "private" ? (
+            <Text style={styles.chatMessage} numberOfLines={1}>
+              {item.lastMessage?.text || "No messages yet"}
+            </Text>
+          ) : (
+            <Text style={styles.chatMessage} numberOfLines={1}>
+              Public Group
+            </Text>
+          )}
         </TouchableOpacity>
 
         <View style={{ alignItems: "flex-end" }}>
@@ -1562,9 +1569,7 @@ const Index = () => {
             {user ? `Welcome, ${user.displayName || "User"}` : "Welcome"}
           </Text>
         )}
-        {/* <Text style={[styles.welcomeText, { color: TextColor }]}>
-          {user ? `Welcome, ${user.displayName || "User"}` : "Welcome"}
-        </Text> */}
+
         <TouchableOpacity
           onPress={() => router.push("/createGroup")}
           style={styles.addButton}
@@ -1657,16 +1662,92 @@ const Index = () => {
             {searchResult ? (
               <View style={styles.resultContainer}>
                 <Text style={styles.resultText}>
-                  Group: {searchResult.name}
+                  Group Name: {searchResult.name}
                 </Text>
                 <TouchableOpacity
                   style={styles.requestButton}
                   onPress={async () => {
                     try {
-                      await updateDoc(doc(db, "groups", searchResult.id), {
-                        members: arrayUnion(user?.uid),
+                      setRequestingJoining(true);
+                      const groupSnap = await getDoc(
+                        doc(db, "groups", searchResult.id)
+                      );
+
+                      if (!groupSnap.exists()) {
+                        setSearchText("");
+                        setAlertTitle("Join Request Sent");
+                        setAlertMessage(`Group not found`);
+                        setAlertVisible(true);
+                        return;
+                        // return alert("Group not found");
+                      }
+
+                      const groupData = groupSnap.data();
+
+                      // 2️⃣ Already a member check
+                      if (groupData.members?.includes(user?.uid)) {
+                        setSearchText("");
+                        setRequestingJoining(false);
+                        setAlertTitle("Join Request Sent");
+                        setAlertMessage(
+                          `Your request to join "${searchResult.name}" has been sent to the admin.`
+                        );
+                        setAlertVisible(true);
+                        return;
+                        // return alert("You are already a member in this group");
+                      }
+
+                      // 3️⃣ Check if already requested
+                      const requestSnap = await getDoc(
+                        doc(
+                          db,
+                          "groups",
+                          searchResult.id,
+                          "groupRequests",
+                          user?.uid as string
+                        )
+                      );
+                      if (requestSnap.exists()) {
+                        setSearchText("");
+                        setRequestingJoining(false);
+                        setAlertTitle("Join Request Sent");
+                        setAlertMessage(
+                          `You have already sent a join request for this group - "${searchResult.name}" `
+                        );
+                        setAlertVisible(true);
+                        return;
+                        // return alert(
+                        //   "You have already sent a join request for this group"
+                        // );
+                      }
+
+                      // 4️⃣ Capacity check
+                      const memberCount = groupData.members?.length || 0;
+                      const max = groupData.maxMembers ?? 50;
+                      if (memberCount >= max) {
+                        return alert("Group is full");
+                      }
+
+                      // 5️⃣ Create join request
+                      const requestRef = doc(
+                        db,
+                        "groups",
+                        searchResult.id,
+                        "groupRequests",
+                        user?.uid as string
+                      );
+                      await setDoc(requestRef, {
+                        status: "pending",
+                        requestedAt: serverTimestamp(),
+                        id: user?.uid,
                       });
-                      alert("Join request sent (or you joined directly)!");
+
+                      // alert("Join request sent to admin");
+                      setSearchText("");
+                      setAlertTitle("Join Request Sent");
+                      setAlertMessage("Join request sent to admin ");
+                      setAlertVisible(true);
+                      setRequestingJoining(false);
                       setJoinModalVisible(false);
                     } catch (err) {
                       console.error("Error joining group:", err);
@@ -1696,8 +1777,11 @@ const Index = () => {
                       console.error("Failed to notify admin:", e);
                     }
                   }}
+                  disabled={requestingjoining}
                 >
-                  <Text style={styles.requestButtonText}>Request to Join</Text>
+                  <Text style={styles.requestButtonText}>
+                    {requestingjoining ? "Requesting...." : "Request to Join"}
+                  </Text>
                 </TouchableOpacity>
               </View>
             ) : (

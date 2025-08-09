@@ -268,6 +268,48 @@ const styles = StyleSheet.create({
   },
   replySender: { fontWeight: "bold", fontSize: 12, color: "#555" },
   replyMessage: { fontSize: 12, color: "#333" },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  modalContent: {
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    padding: 20,
+    width: "80%",
+    shadowColor: "#000",
+    shadowOpacity: 0.2,
+    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 6,
+    elevation: 5,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: "bold",
+    marginBottom: 16,
+    textAlign: "center",
+  },
+  modalButton: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    backgroundColor: "#f0f0f0",
+    borderRadius: 8,
+    marginVertical: 6,
+  },
+  modalButtonText: {
+    fontSize: 16,
+    textAlign: "center",
+  },
+  modalCancel: {
+    marginTop: 10,
+  },
+  modalCancelText: {
+    fontSize: 16,
+    textAlign: "center",
+    color: "#888",
+  },
 });
 import React, { useEffect, useRef, useState } from "react";
 import {
@@ -279,6 +321,8 @@ import {
   StyleSheet,
   ActivityIndicator,
   Alert,
+  Modal,
+  Pressable,
 } from "react-native";
 import { useLocalSearchParams } from "expo-router";
 import {
@@ -325,6 +369,8 @@ const ChatScreen = () => {
   const [selectedMessages, setSelectedMessages] = useState<string[]>([]);
   const [selectionMode, setSelectionMode] = useState(false);
   const [replyingTo, setReplyingTo] = useState<any>(null);
+  const [optionsModalVisible, setOptionsModalVisible] = useState(false);
+  const [selectedMessage, setSelectedMessage] = useState<any>(null);
 
   const formatTime = (timestamp: any) => {
     if (!timestamp) return "";
@@ -572,21 +618,8 @@ const ChatScreen = () => {
                   if (selectionMode) {
                     toggleSelectMessage(item.id); // existing delete selection
                   } else {
-                    Alert.alert("Message Options", "", [
-                      {
-                        text: "Copy",
-                        onPress: () => Clipboard.setStringAsync(item.text),
-                      },
-                      {
-                        text: "Reply",
-                        onPress: () => setReplyingTo(item),
-                      },
-                      {
-                        text: "Delete",
-                        onPress: () => handleLongPress(item.id), // your delete select
-                      },
-                      { text: "Cancel", style: "cancel" },
-                    ]);
+                    setSelectedMessage(item);
+                    setOptionsModalVisible(true);
                   }
                 }}
                 style={[
@@ -651,6 +684,60 @@ const ChatScreen = () => {
           </TouchableOpacity>
         </View>
       )}
+      <Modal
+        transparent
+        visible={optionsModalVisible}
+        animationType="fade"
+        onRequestClose={() => setOptionsModalVisible(false)}
+      >
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={() => setOptionsModalVisible(false)}
+        >
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Message Options</Text>
+
+            <TouchableOpacity
+              style={styles.modalButton}
+              onPress={() => {
+                Clipboard.setStringAsync(selectedMessage.text);
+                setOptionsModalVisible(false);
+              }}
+            >
+              <Text style={styles.modalButtonText}>📋 Copy</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.modalButton}
+              onPress={() => {
+                setReplyingTo(selectedMessage);
+                setOptionsModalVisible(false);
+              }}
+            >
+              <Text style={styles.modalButtonText}>💬 Reply</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.modalButton, { backgroundColor: "#ff4d4d" }]}
+              onPress={() => {
+                handleLongPress(selectedMessage.id);
+                setOptionsModalVisible(false);
+              }}
+            >
+              <Text style={[styles.modalButtonText, { color: "#fff" }]}>
+                🗑 Delete
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.modalCancel}
+              onPress={() => setOptionsModalVisible(false)}
+            >
+              <Text style={styles.modalCancelText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </Pressable>
+      </Modal>
 
       <View style={[styles.inputContainer, { backgroundColor: ListColor }]}>
         <TextInput
