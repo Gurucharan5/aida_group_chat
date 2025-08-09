@@ -233,6 +233,8 @@ import { usePendingRequestsWithUserData } from "@/hooks/usePendingRequestsWithUs
 import { sendPushNotification } from "@/helpers/SendNotification";
 import { MaterialIcons } from "@expo/vector-icons";
 import * as Clipboard from "expo-clipboard";
+import { BlurView } from "expo-blur";
+import LottieView from "lottie-react-native";
 
 export default function GroupSettings() {
   const { id: groupId } = useLocalSearchParams();
@@ -251,6 +253,7 @@ export default function GroupSettings() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [groupName, setGroupName] = useState("");
   const [groupUniqueId, setGroupUniqueId] = useState("");
+  const [processLoading, setProcessLoading] = useState(false);
 
   // Fetch group data
   useEffect(() => {
@@ -275,6 +278,7 @@ export default function GroupSettings() {
   }, [groupId, user?.uid]);
 
   const acceptRequest = async (userToAdd: any) => {
+    setProcessLoading(true);
     const groupRef = doc(db, "groups", groupId as string);
 
     if (group.members.includes(userToAdd.uid)) return;
@@ -319,14 +323,17 @@ export default function GroupSettings() {
     } catch (e) {
       console.error("Failed to notify admin:", e);
     }
+    setProcessLoading(false);
   };
 
   const rejectRequest = async (userToReject: any) => {
+    setProcessLoading(true);
     console.log(userToReject, "userToReject");
 
     await deleteDoc(
       doc(db, "groups", groupId as string, "groupRequests", userToReject.id)
     );
+    setProcessLoading(false);
   };
 
   const leaveGroup = async () => {
@@ -352,6 +359,10 @@ export default function GroupSettings() {
   };
 
   const kickOutUser = async (userId: string) => {
+    setProcessLoading(true);
+    console.log(userId, "userId to kick out");
+    console.log(group.createdBy, "group createdBy");
+    console.log(user?.uid, "current user uid");
     if (group.createdBy !== user?.uid) {
       Alert.alert("Only admin can kick out users");
       return;
@@ -359,6 +370,11 @@ export default function GroupSettings() {
     await deleteDoc(
       doc(db, "groups", groupId as string, "groupRequests", userId)
     );
+    const groupRef = doc(db, "groups", groupId as string);
+    await updateDoc(groupRef, {
+      members: group.members.filter((uid: string) => uid !== userId),
+    });
+    setProcessLoading(false);
   };
   const copyToClipboard = async () => {
     await Clipboard.setStringAsync(groupUniqueId as string);
@@ -433,6 +449,25 @@ export default function GroupSettings() {
           </TouchableOpacity>
 
           <Text style={styles.subTitle}>Pending Requests</Text>
+          {processLoading && (
+            <BlurView
+              intensity={50}
+              tint="light"
+              style={{
+                ...StyleSheet.absoluteFillObject,
+                zIndex: 10,
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <LottieView
+                source={require("@/assets/loading.json")}
+                style={{ width: 100, height: 100 }}
+                autoPlay
+                loop
+              />
+            </BlurView> // Show a loading indicator while processing requests
+          )}
           {loading ? (
             <Text>Loading...</Text>
           ) : requests.length === 0 ? (
@@ -475,7 +510,7 @@ export default function GroupSettings() {
                     ) : (
                       <Text style={{ color: "gray" }}>Member</Text>
                     )}
-                    {item.uid === group.createdBy && (
+                    {item.uid !== group.createdBy && (
                       <TouchableOpacity onPress={() => kickOutUser(item.uid)}>
                         <Text style={[styles.reject, { color: "red" }]}>
                           Kick

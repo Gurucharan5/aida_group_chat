@@ -1288,7 +1288,7 @@ import {
   TextInput,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { router } from "expo-router";
+import { router, useRootNavigationState } from "expo-router";
 import { useAuth } from "@/context/AuthContext";
 import {
   collection,
@@ -1308,6 +1308,8 @@ import {
 import { db } from "../../firebaseConfig";
 import { useTheme } from "@/context/ThemeContext";
 import { sendPushNotification } from "@/helpers/SendNotification";
+import WarningMessage from "@/components/WarningMessage";
+import CustomAlert from "@/components/CustomAlert";
 
 type Group = {
   id: string;
@@ -1327,6 +1329,7 @@ const Index = () => {
   const BackgroundColor = themeConfig.background;
   const TextColor = themeConfig.text;
   const ListColor = themeConfig.tab;
+  const navigationState = useRootNavigationState();
   const [segment, setSegment] = useState<"your" | "all">("your");
   const [groups, setGroups] = useState<Group[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1335,6 +1338,19 @@ const Index = () => {
   const [searchResult, setSearchResult] = useState<any>(null);
   const [searching, setSearching] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [alertVisible, setAlertVisible] = useState(false);
+  const [alertTitle, setAlertTitle] = useState("");
+  const [alertMessage, setAlertMessage] = useState("");
+
+  const closeAlert = () => {
+    setAlertVisible(false);
+  };
+  useEffect(() => {
+    if (!navigationState?.key) return;
+    if (!user) {
+      router.replace("/login");
+    }
+  }, [user, navigationState]);
   useEffect(() => {
     const checkAdminStatus = async () => {
       if (!user?.uid) return;
@@ -1429,22 +1445,22 @@ const Index = () => {
   //   }
   // };
 
-  const loadAllGroups = async () => {
-    try {
-      setLoading(true);
-      const q = query(
-        collection(db, "groups"),
-        orderBy("lastMessage.timestamp", "desc")
-      );
-      const snapshot = await getDocs(q);
-      const data = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-      setGroups(data);
-    } catch (err) {
-      console.error("Error loading all groups:", err);
-    } finally {
-      setLoading(false);
-    }
-  };
+  // const loadAllGroups = async () => {
+  //   try {
+  //     setLoading(true);
+  //     const q = query(
+  //       collection(db, "groups"),
+  //       orderBy("lastMessage.timestamp", "desc")
+  //     );
+  //     const snapshot = await getDocs(q);
+  //     const data = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+  //     setGroups(data);
+  //   } catch (err) {
+  //     console.error("Error loading all groups:", err);
+  //   } finally {
+  //     setLoading(false);
+  //   }
+  // };
 
   const handleJoinGroup = async (group: Group) => {
     if (!user?.uid) return;
@@ -1472,8 +1488,11 @@ const Index = () => {
       await updateDoc(groupRef, {
         members: [...(group.members || []), user.uid],
       });
-      Alert.alert("You joined the group!");
-      loadAllGroups();
+      // Alert.alert("You joined the group!");
+      setAlertTitle("Success");
+      setAlertMessage("You have successfully joined the group!");
+      setAlertVisible(true);
+      // loadAllGroups();
     }
   };
 
@@ -1525,6 +1544,12 @@ const Index = () => {
       style={[styles.container, { backgroundColor: BackgroundColor }]}
     >
       {/* Header */}
+      <CustomAlert
+        visible={alertVisible}
+        title={alertTitle}
+        message={alertMessage}
+        onClose={closeAlert}
+      />
       <View style={styles.header}>
         {isAdmin ? (
           <TouchableOpacity onPress={() => router.push("/admin/all-chats")}>
@@ -1579,7 +1604,7 @@ const Index = () => {
               segment === "all" && styles.segmentTextActive,
             ]}
           >
-            All Groups
+            Public Groups
           </Text>
         </TouchableOpacity>
       </View>
@@ -1613,7 +1638,7 @@ const Index = () => {
           <View style={styles.modalContainer}>
             <Text style={styles.modalTitle}>Join Group</Text>
             <TextInput
-              placeholder="Enter group name"
+              placeholder="Enter group UniqueId"
               value={searchText}
               onChangeText={setSearchText}
               style={styles.input}
@@ -1628,7 +1653,7 @@ const Index = () => {
                 {searching ? "Searching..." : "Search"}
               </Text>
             </TouchableOpacity>
-
+            <WarningMessage message="Ask your group Admin for Group UniqueID" />
             {searchResult ? (
               <View style={styles.resultContainer}>
                 <Text style={styles.resultText}>

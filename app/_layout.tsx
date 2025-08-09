@@ -7,6 +7,8 @@ import { ThemeProvider } from "@/context/ThemeContext";
 import { useEffect, useState } from "react";
 import CustomToast from "@/components/CustomToast";
 import { ToastProvider } from "@/context/ToastContext";
+import { View, StyleSheet, Image } from "react-native";
+import LottieView from "lottie-react-native";
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -20,6 +22,28 @@ export default function Layout() {
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState(""); // To store the toast message
   const [toastTitle, setToastTitle] = useState("");
+  const [initialLoading, setInitialLoading] = useState(true);
+
+  useEffect(() => {
+    // Simulate startup check (replace with your auth check)
+    const timer = setTimeout(() => {
+      setInitialLoading(false);
+    }, 1500); // wait 1.5s for loading animation
+    return () => clearTimeout(timer);
+  }, []);
+
+  // if (initialLoading) {
+  //   return (
+  //     <View style={styles.loadingContainer}>
+  //       <LottieView
+  //         source={require("@/assets/loading.json")}
+  //         autoPlay
+  //         loop
+  //         style={{ width: 200, height: 200 }}
+  //       />
+  //     </View>
+  //   );
+  // }
 
   useEffect(() => {
     const subscription = Notifications.addNotificationReceivedListener(
@@ -50,7 +74,24 @@ export default function Layout() {
       <ThemeProvider>
         <NotificationProvider>
           <ToastProvider>
-            <Slot />
+            {initialLoading ? (
+              <View style={styles.loadingContainer}>
+                {/* App Logo */}
+                <Image
+                  source={require("@/assets/images/Ailogo.png")}
+                  style={styles.logo}
+                  resizeMode="contain"
+                />
+                <LottieView
+                  source={require("@/assets/loading.json")}
+                  autoPlay
+                  loop
+                  style={{ width: 200, height: 200 }}
+                />
+              </View>
+            ) : (
+              <Slot />
+            )}
             {showToast && (
               <CustomToast
                 message={toastMessage}
@@ -64,3 +105,15 @@ export default function Layout() {
     </AuthProvider>
   );
 }
+const styles = StyleSheet.create({
+  loadingContainer: {
+    flex: 1,
+    backgroundColor: "#fff",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  logo: {
+    width: 200,
+    height: 200,
+  },
+});

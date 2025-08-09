@@ -247,6 +247,27 @@ const styles = StyleSheet.create({
     width: 250,
     height: 250,
   },
+  replyPreview: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#eee",
+    padding: 6,
+    borderLeftWidth: 3,
+    borderLeftColor: "#2196F3",
+    marginBottom: 5,
+  },
+  replyLabel: { fontWeight: "bold", color: "#555" },
+  replyText: { color: "#333", fontSize: 12 },
+  cancelReply: { color: "red", marginLeft: 10, fontSize: 16 },
+  replyContainer: {
+    backgroundColor: "#f1f1f1",
+    padding: 4,
+    borderLeftWidth: 3,
+    borderLeftColor: "#2196F3",
+    marginBottom: 4,
+  },
+  replySender: { fontWeight: "bold", fontSize: 12, color: "#555" },
+  replyMessage: { fontSize: 12, color: "#333" },
 });
 import React, { useEffect, useRef, useState } from "react";
 import {
@@ -257,6 +278,7 @@ import {
   FlatList,
   StyleSheet,
   ActivityIndicator,
+  Alert,
 } from "react-native";
 import { useLocalSearchParams } from "expo-router";
 import {
@@ -273,8 +295,9 @@ import {
   getDocs,
   where,
   documentId,
+  deleteDoc,
 } from "firebase/firestore";
-
+import * as Clipboard from "expo-clipboard";
 import { db } from "../../firebaseConfig";
 import { useAuth } from "@/context/AuthContext";
 import GroupHeader from "@/components/GroupHeader";
@@ -293,11 +316,16 @@ const ChatScreen = () => {
   const BackgroundColor = themeConfig.background;
   const TextColor = themeConfig.text;
   const ListColor = themeConfig.tab;
+  const IconColor = themeConfig.icon;
   const [messages, setMessages] = useState<any[]>([]);
   const [text, setText] = useState("");
   const [groupName, setGroupName] = useState("Group");
   const [loading, setLoading] = useState(true);
   const animationRef = useRef<LottieView>(null);
+  const [selectedMessages, setSelectedMessages] = useState<string[]>([]);
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [replyingTo, setReplyingTo] = useState<any>(null);
+
   const formatTime = (timestamp: any) => {
     if (!timestamp) return "";
     const date = timestamp.toDate();
@@ -359,6 +387,33 @@ const ChatScreen = () => {
     return unsubscribe;
   }, [id, user?.uid]);
 
+  const toggleSelectMessage = (id: string) => {
+    if (selectedMessages.includes(id)) {
+      setSelectedMessages(selectedMessages.filter((mid) => mid !== id));
+    } else {
+      setSelectedMessages([...selectedMessages, id]);
+    }
+  };
+
+  const handleLongPress = (id: string) => {
+    setSelectionMode(true);
+    toggleSelectMessage(id);
+  };
+
+  const deleteSelectedMessages = async () => {
+    try {
+      await Promise.all(
+        selectedMessages.map((msgId) =>
+          deleteDoc(doc(db, `groups/${id}/messages`, msgId))
+        )
+      );
+      setSelectedMessages([]);
+      setSelectionMode(false);
+    } catch (error) {
+      console.error("Error deleting messages:", error);
+    }
+  };
+
   const sendMessage = async () => {
     if (!text.trim()) return;
 
@@ -373,7 +428,15 @@ const ChatScreen = () => {
       sender: user?.displayName || "You",
       senderId: user?.uid,
       seen: false,
+      replyTo: replyingTo
+        ? {
+            id: replyingTo.id,
+            text: replyingTo.text,
+            sender: replyingTo.sender,
+          }
+        : null,
     });
+    setReplyingTo(null);
     // Now update the group's lastMessage and updatedAt
     const groupDocRef = doc(db, "groups", String(id));
     await updateDoc(groupDocRef, {
@@ -463,6 +526,25 @@ const ChatScreen = () => {
   return (
     <View style={[styles.container, { backgroundColor: BackgroundColor }]}>
       <GroupHeader groupName={groupName} groupId={String(id)} />
+      {selectionMode && (
+        <View
+          style={{ flexDirection: "row", padding: 10, backgroundColor: "#fee" }}
+        >
+          <TouchableOpacity onPress={deleteSelectedMessages}>
+            <Text style={{ color: "red" }}>
+              Delete ({selectedMessages.length})
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => {
+              setSelectionMode(false);
+              setSelectedMessages([]);
+            }}
+          >
+            <Text style={{ marginLeft: 20 }}>Cancel</Text>
+          </TouchableOpacity>
+        </View>
+      )}
       {loading ? (
         <View
           style={{ flex: 1, justifyContent: "center", alignItems: "center" }}
@@ -482,11 +564,35 @@ const ChatScreen = () => {
           // inverted
           renderItem={({ item }) => {
             const isCurrentUser = item.senderId === user?.uid;
+            const isSelected = selectedMessages.includes(item.id);
             return (
-              <View
+              <TouchableOpacity
+                onLongPress={() => handleLongPress(item.id)}
+                onPress={() => {
+                  if (selectionMode) {
+                    toggleSelectMessage(item.id); // existing delete selection
+                  } else {
+                    Alert.alert("Message Options", "", [
+                      {
+                        text: "Copy",
+                        onPress: () => Clipboard.setStringAsync(item.text),
+                      },
+                      {
+                        text: "Reply",
+                        onPress: () => setReplyingTo(item),
+                      },
+                      {
+                        text: "Delete",
+                        onPress: () => handleLongPress(item.id), // your delete select
+                      },
+                      { text: "Cancel", style: "cancel" },
+                    ]);
+                  }
+                }}
                 style={[
                   styles.messageContainer,
                   isCurrentUser ? styles.messageRight : styles.messageLeft,
+                  isSelected && { backgroundColor: "rgba(0, 150, 255, 0.3)" },
                 ]}
               >
                 <View
@@ -495,6 +601,16 @@ const ChatScreen = () => {
                     isCurrentUser ? styles.bubbleRight : styles.bubbleLeft,
                   ]}
                 >
+                  {item.replyTo && (
+                    <View style={styles.replyContainer}>
+                      <Text style={styles.replySender}>
+                        {item.replyTo.sender}
+                      </Text>
+                      <Text style={styles.replyMessage} numberOfLines={1}>
+                        {item.replyTo.text}
+                      </Text>
+                    </View>
+                  )}
                   <Text style={styles.messageText}>{item.text}</Text>
                   <View style={styles.metaContainer}>
                     <Text style={styles.time}>
@@ -507,7 +623,7 @@ const ChatScreen = () => {
                     )}
                   </View>
                 </View>
-              </View>
+              </TouchableOpacity>
             );
           }}
           keyExtractor={(item) => item.id}
@@ -520,6 +636,22 @@ const ChatScreen = () => {
           }}
         />
       )}
+      {replyingTo && (
+        <View style={styles.replyPreview}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.replyLabel}>
+              Replying to {replyingTo.sender}
+            </Text>
+            <Text style={styles.replyText} numberOfLines={1}>
+              {replyingTo.text}
+            </Text>
+          </View>
+          <TouchableOpacity onPress={() => setReplyingTo(null)}>
+            <Text style={styles.cancelReply}>✕</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
       <View style={[styles.inputContainer, { backgroundColor: ListColor }]}>
         <TextInput
           style={styles.input}

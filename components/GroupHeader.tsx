@@ -16,6 +16,7 @@ const GroupHeader: React.FC<GroupHeaderProps> = ({ groupName, groupId }) => {
   const BackgroundColor = themeConfig.background;
   const TextColor = themeConfig.text;
   const ListColor = themeConfig.tab;
+  const IconColor = themeConfig.icon;
   return (
     <View style={[styles.container, { backgroundColor: BackgroundColor }]}>
       <Text style={[styles.title, { color: TextColor }]}>{groupName}</Text>
@@ -23,7 +24,7 @@ const GroupHeader: React.FC<GroupHeaderProps> = ({ groupName, groupId }) => {
         onPress={() => router.push(`/groupSettings/${groupId}`)}
         style={styles.button}
       >
-        <Ionicons name="settings-outline" size={24} color="black" />
+        <Ionicons name="settings-outline" size={24} color={IconColor} />
         <Text style={[styles.buttonText, { color: TextColor }]}>Manage</Text>
       </TouchableOpacity>
     </View>
