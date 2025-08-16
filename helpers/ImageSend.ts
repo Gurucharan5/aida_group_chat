@@ -1,9 +1,9 @@
 import * as ImagePicker from 'expo-image-picker';
 
-const CLOUDINARY_URL = "https://api.cloudinary.com/v1_1/dhhqviw8d/image/upload";
+const CLOUDINARY_URL = "https://api.cloudinary.com/v1_1/dbgscccun/image/upload";
 const UPLOAD_PRESET = "aida_upload";
 
-export const pickAndUploadImage = async (): Promise<string | null> => {
+export const pickAndUploadImage = async (onProgress: (progress: number) => void): Promise<string | null> => {
   try {
     // Ask for permission
     const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -35,14 +35,38 @@ export const pickAndUploadImage = async (): Promise<string | null> => {
     formData.append("upload_preset", UPLOAD_PRESET);
     // console.log(formData,"------------------")
     // Upload to Cloudinary
-    const response = await fetch(CLOUDINARY_URL, {
-      method: "POST",
-      body: formData,
-    });
+    // const response = await fetch(CLOUDINARY_URL, {
+    //   method: "POST",
+    //   body: formData,
+    // });
 
-    const data = await response.json();
-    // console.log(data,"=========================")
-    return data.secure_url; // ✅ URL of the uploaded image
+    // const data = await response.json();
+    // // console.log(data,"=========================")
+    // return data.secure_url; // ✅ URL of the uploaded image
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open("POST", CLOUDINARY_URL);
+
+      // ✅ progress event
+      xhr.upload.onprogress = (event) => {
+        if (event.lengthComputable) {
+          const progress = Math.round((event.loaded * 100) / event.total);
+          onProgress(progress); // send % back
+        }
+      };
+
+      xhr.onload = () => {
+        if (xhr.status === 200) {
+          const response = JSON.parse(xhr.response);
+          resolve(response.secure_url);
+        } else {
+          reject("Upload failed");
+        }
+      };
+
+      xhr.onerror = () => reject("Network error during upload");
+      xhr.send(formData);
+    });
   } catch (error) {
     console.error("Upload error:", error);
     return null;

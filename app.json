@@ -13,8 +13,8 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/Ailogo.png",
-        "backgroundColor": "#ffffff"
+        "foregroundImage": "./assets/images/Aii.png",
+        "backgroundColor": "#141514"
       },
       "package": "com.gcenterprise.groupchatapp",
       "googleServicesFile": "./google-services.json",
@@ -30,10 +30,10 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/Ailogo.png",
+          "image": "./assets/images/Aii.png",
           "imageWidth": 200,
           "resizeMode": "contain",
-          "backgroundColor": "#000000"
+          "backgroundColor": "#141514"
         }
       ],
       "expo-video"

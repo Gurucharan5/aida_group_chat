@@ -1286,6 +1286,7 @@ import {
   Alert,
   Modal,
   TextInput,
+  AppState,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { router, useRootNavigationState } from "expo-router";
@@ -1305,7 +1306,7 @@ import {
   onSnapshot,
   arrayUnion,
 } from "firebase/firestore";
-import { db } from "../../firebaseConfig";
+import { auth, db } from "../../firebaseConfig";
 import { useTheme } from "@/context/ThemeContext";
 import { sendPushNotification } from "@/helpers/SendNotification";
 import WarningMessage from "@/components/WarningMessage";
@@ -1342,6 +1343,24 @@ const Index = () => {
   const [alertTitle, setAlertTitle] = useState("");
   const [alertMessage, setAlertMessage] = useState("");
   const [requestingjoining, setRequestingJoining] = useState(false);
+
+  let currentState = AppState.currentState;
+  // console.log(currentState, "-----------------current app state");
+  AppState.addEventListener("change", async (nextState) => {
+    const user = auth.currentUser;
+    // console.log(user, "-----------------current user in app state change");
+    if (!user) return;
+
+    const userRef = doc(db, "users", user.uid);
+
+    if (nextState === "active") {
+      await updateDoc(userRef, { online: true });
+    } else if (nextState.match(/inactive|background/)) {
+      await updateDoc(userRef, { online: false, lastSeen: serverTimestamp() });
+    }
+
+    currentState = nextState;
+  });
 
   const closeAlert = () => {
     setAlertVisible(false);
@@ -1425,43 +1444,6 @@ const Index = () => {
 
     return () => unsubscribe(); // Clean up the listener when segment/user changes
   }, [segment, authLoading, user?.uid]);
-
-  // const loadYourGroups = async () => {
-  //   if (!user?.uid) return;
-
-  //   try {
-  //     setLoading(true);
-  //     const q = query(
-  //       collection(db, "groups"),
-  //       where("members", "array-contains", user.uid),
-  //       orderBy("lastMessage.timestamp", "desc")
-  //     );
-  //     const snapshot = await getDocs(q);
-  //     const data = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-  //     setGroups(data);
-  //   } catch (err) {
-  //     console.error("Error loading your groups:", err);
-  //   } finally {
-  //     setLoading(false);
-  //   }
-  // };
-
-  // const loadAllGroups = async () => {
-  //   try {
-  //     setLoading(true);
-  //     const q = query(
-  //       collection(db, "groups"),
-  //       orderBy("lastMessage.timestamp", "desc")
-  //     );
-  //     const snapshot = await getDocs(q);
-  //     const data = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-  //     setGroups(data);
-  //   } catch (err) {
-  //     console.error("Error loading all groups:", err);
-  //   } finally {
-  //     setLoading(false);
-  //   }
-  // };
 
   const handleJoinGroup = async (group: Group) => {
     if (!user?.uid) return;

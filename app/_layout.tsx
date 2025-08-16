@@ -15,6 +15,8 @@ Notifications.setNotificationHandler({
     shouldShowAlert: false,
     shouldPlaySound: false,
     shouldSetBadge: false,
+    shouldShowBanner: false,
+    shouldShowList: false,
   }),
 });
 
@@ -78,7 +80,7 @@ export default function Layout() {
               <View style={styles.loadingContainer}>
                 {/* App Logo */}
                 <Image
-                  source={require("@/assets/images/Ailogo.png")}
+                  source={require("@/assets/images/Aii.png")}
                   style={styles.logo}
                   resizeMode="contain"
                 />
@@ -108,7 +110,7 @@ export default function Layout() {
 const styles = StyleSheet.create({
   loadingContainer: {
     flex: 1,
-    backgroundColor: "#fff",
+    backgroundColor: "#141514",
     alignItems: "center",
     justifyContent: "center",
   },

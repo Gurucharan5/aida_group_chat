@@ -19,6 +19,7 @@ import {
 } from "firebase/firestore";
 import { useAuth } from "@/context/AuthContext";
 import { sendPushNotification } from "@/helpers/SendNotification";
+import { useTheme } from "@/context/ThemeContext";
 
 const CreateGroup = () => {
   const router = useRouter();
@@ -27,16 +28,26 @@ const CreateGroup = () => {
   const [groupName, setGroupName] = useState("");
   const [groupType, setGroupType] = useState<"public" | "private">("private");
   const [maxMembers, setMaxMembers] = useState("10");
+  const [buttonLoading, setButtonLoading] = useState(false);
+  // Optional: App name for the group
   const [appName, setAppName] = useState("");
+  const { themeConfig } = useTheme();
+  const BackgroundColor = themeConfig.background;
+  const TextColor = themeConfig.text;
+  const ListColor = themeConfig.tab;
+  const IconColor = themeConfig.icon;
 
   const handleCreateGroup = async () => {
+    setButtonLoading(true);
     if (!groupName.trim()) {
       Alert.alert("Group name is required");
+      setButtonLoading(false);
       return;
     }
 
     if (!Number(maxMembers) || parseInt(maxMembers) <= 0) {
       Alert.alert("Please enter a valid max members limit");
+      setButtonLoading(false);
       return;
     }
 
@@ -72,6 +83,7 @@ const CreateGroup = () => {
           }
         }
       }
+      setButtonLoading(false);
       router.replace(`/chat/${docRef.id}`);
     } catch (error) {
       console.error("Error creating group:", error);
@@ -80,18 +92,22 @@ const CreateGroup = () => {
   };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.heading}>Create New Group</Text>
+    <View style={[styles.container, { backgroundColor: BackgroundColor }]}>
+      <Text style={[styles.heading, { color: TextColor }]}>
+        Create New Group
+      </Text>
 
       <TextInput
         placeholder="Group Name"
         value={groupName}
         onChangeText={setGroupName}
-        style={styles.input}
+        style={[styles.input, { color: TextColor }]}
+        placeholderTextColor="#888"
+        maxLength={15}
       />
 
       <View style={styles.switchRow}>
-        <Text style={styles.label}>Private Group?</Text>
+        <Text style={[styles.label, { color: TextColor }]}>Private Group?</Text>
         <Switch
           value={groupType === "private"}
           onValueChange={(val) => setGroupType(val ? "private" : "public")}
@@ -102,20 +118,32 @@ const CreateGroup = () => {
         placeholder="Max Members"
         value={maxMembers}
         onChangeText={setMaxMembers}
-        style={styles.input}
+        style={[styles.input, { color: TextColor }]}
         keyboardType="numeric"
+        placeholderTextColor={"#888"}
       />
 
       <TextInput
         placeholder="App Name (optional)"
         value={appName}
         onChangeText={setAppName}
-        style={styles.input}
+        style={[styles.input, { color: TextColor }]}
+        placeholderTextColor={"#888"}
       />
 
-      <TouchableOpacity style={styles.button} onPress={handleCreateGroup}>
+      {buttonLoading ? (
+        <View style={styles.button}>
+          <Text style={styles.buttonText}>Creating.....</Text>
+        </View>
+      ) : (
+        <TouchableOpacity style={styles.button} onPress={handleCreateGroup}>
+          <Text style={styles.buttonText}>Create Group</Text>
+        </TouchableOpacity>
+      )}
+
+      {/* <TouchableOpacity style={styles.button} onPress={handleCreateGroup}>
         <Text style={styles.buttonText}>Create Group</Text>
-      </TouchableOpacity>
+      </TouchableOpacity> */}
     </View>
   );
 };

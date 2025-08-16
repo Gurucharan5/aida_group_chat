@@ -196,7 +196,15 @@
 //   switchLink: { textAlign: "center", color: "blue", marginTop: 10 },
 // });
 import React, { useState, useEffect } from "react";
-import { View, Text, TextInput, StyleSheet, Alert, TouchableOpacity, ScrollView } from "react-native";
+import {
+  View,
+  Text,
+  TextInput,
+  StyleSheet,
+  Alert,
+  TouchableOpacity,
+  ScrollView,
+} from "react-native";
 import { useRouter } from "expo-router";
 import { useAuth } from "@/context/AuthContext";
 
@@ -209,7 +217,8 @@ const LoginScreen: React.FC = () => {
   const [name, setName] = useState("");
   const [showDisclaimer, setShowDisclaimer] = useState(false);
 
-  const { loginAsGuest, user, loading, signupWithEmail, loginWithEmail } = useAuth();
+  const { loginAsGuest, user, loading, signupWithEmail, loginWithEmail } =
+    useAuth();
   const router = useRouter();
 
   useEffect(() => {
@@ -256,7 +265,11 @@ const LoginScreen: React.FC = () => {
   return (
     <View style={styles.container}>
       <Text style={styles.title}>
-        {isGuestLogin ? "Guest Login" : isSignupMode ? "Email Sign Up" : "Email Login"}
+        {isGuestLogin
+          ? "Guest Login"
+          : isSignupMode
+          ? "Email Sign Up"
+          : "Email Login"}
       </Text>
 
       {isGuestLogin ? (
@@ -266,6 +279,7 @@ const LoginScreen: React.FC = () => {
             onChangeText={setName}
             placeholder="Your name"
             style={styles.input}
+            placeholderTextColor={"#888"}
           />
           <TouchableOpacity style={styles.button} onPress={handleLogin}>
             <Text style={styles.buttonText}>Continue as Guest</Text>
@@ -279,6 +293,7 @@ const LoginScreen: React.FC = () => {
               onChangeText={setUsername}
               placeholder="Username"
               style={styles.input}
+              placeholderTextColor={"#888"}
             />
           )}
           <TextInput
@@ -286,12 +301,14 @@ const LoginScreen: React.FC = () => {
             onChangeText={setEmail}
             placeholder="Email"
             style={styles.input}
+            placeholderTextColor={"#888"}
           />
           <TextInput
             value={password}
             onChangeText={setPassword}
             placeholder="Password"
             style={styles.input}
+            placeholderTextColor={"#888"}
             secureTextEntry
           />
           {isSignupMode ? (
@@ -305,7 +322,9 @@ const LoginScreen: React.FC = () => {
           )}
           <TouchableOpacity onPress={() => setIsSignupMode(!isSignupMode)}>
             <Text style={styles.switchLink}>
-              {isSignupMode ? "Switch to Login" : "Don't have an account? Sign Up"}
+              {isSignupMode
+                ? "Switch to Login"
+                : "Don't have an account? Sign Up"}
             </Text>
           </TouchableOpacity>
         </>
@@ -317,12 +336,16 @@ const LoginScreen: React.FC = () => {
             <ScrollView>
               <Text style={styles.modalTitle}>Disclaimer</Text>
               <Text style={styles.modalText}>
-                By continuing, you confirm that you are 18 years or older and agree to follow our Community Guidelines.
+                By continuing, you confirm that you are 18 years or older and
+                agree to follow our Community Guidelines.
               </Text>
               <TouchableOpacity onPress={() => router.push("/GuideLines")}>
                 <Text style={styles.linkText}>View Community Guidelines</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.button} onPress={confirmDisclaimer}>
+              <TouchableOpacity
+                style={styles.button}
+                onPress={confirmDisclaimer}
+              >
                 <Text style={styles.buttonText}>Agree and Continue</Text>
               </TouchableOpacity>
               <TouchableOpacity
@@ -342,8 +365,19 @@ const LoginScreen: React.FC = () => {
 export default LoginScreen;
 
 const styles = StyleSheet.create({
-  container: { flex: 1, justifyContent: "center", padding: 20, backgroundColor: "#F5F5F5" },
-  title: { fontSize: 24, fontWeight: "bold", marginBottom: 20, textAlign: "center", color: "#333" },
+  container: {
+    flex: 1,
+    justifyContent: "center",
+    padding: 20,
+    backgroundColor: "#F5F5F5",
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: "bold",
+    marginBottom: 20,
+    textAlign: "center",
+    color: "#333",
+  },
   input: {
     borderWidth: 1,
     borderColor: "#DDD",
@@ -352,6 +386,7 @@ const styles = StyleSheet.create({
     marginBottom: 15,
     fontSize: 16,
     backgroundColor: "#FFF",
+    color: '#000'
   },
   button: {
     backgroundColor: "#007BFF",
@@ -388,8 +423,23 @@ const styles = StyleSheet.create({
     width: "85%",
     maxWidth: 400,
   },
-  modalTitle: { fontSize: 20, fontWeight: "bold", marginBottom: 10, textAlign: "center" },
-  modalText: { fontSize: 16, marginBottom: 20, textAlign: "center", color: "#333" },
-  linkText: { color: "#007BFF", textAlign: "center", marginBottom: 20, textDecorationLine: "underline" },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: "bold",
+    marginBottom: 10,
+    textAlign: "center",
+  },
+  modalText: {
+    fontSize: 16,
+    marginBottom: 20,
+    textAlign: "center",
+    color: "#333",
+  },
+  linkText: {
+    color: "#007BFF",
+    textAlign: "center",
+    marginBottom: 20,
+    textDecorationLine: "underline",
+  },
   cancelButton: { backgroundColor: "#777", marginTop: 10 },
 });

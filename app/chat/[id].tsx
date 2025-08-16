@@ -310,6 +310,46 @@ const styles = StyleSheet.create({
     textAlign: "center",
     color: "#888",
   },
+  mediaButtons: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  iconButton: {
+    padding: 6,
+    marginLeft: 4,
+  },
+  image: {
+    width: 200,
+    height: 200,
+    borderRadius: 12,
+    marginTop: 5,
+  },
+  snapContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#f1f1f1",
+    padding: 10,
+    borderRadius: 20,
+    alignSelf: "flex-start",
+  },
+  snapIconWrapper: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#007AFF",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 10,
+  },
+  snapIcon: {
+    fontSize: 20,
+    color: "#fff",
+  },
+  snapText: {
+    fontSize: 14,
+    color: "#333",
+    fontWeight: "600",
+  },
 });
 import React, { useEffect, useRef, useState } from "react";
 import {
@@ -323,8 +363,9 @@ import {
   Alert,
   Modal,
   Pressable,
+  Image,
 } from "react-native";
-import { useLocalSearchParams } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import {
   collection,
   query,
@@ -349,6 +390,14 @@ import { useTheme } from "@/context/ThemeContext";
 import { sendPushNotification } from "@/helpers/SendNotification";
 import { usePreventScreenCapture } from "expo-screen-capture";
 import LottieView from "lottie-react-native";
+import {
+  FontAwesome6,
+  Ionicons,
+  MaterialCommunityIcons,
+} from "@expo/vector-icons";
+import { pickAndUploadImage } from "@/helpers/ImageSend";
+import { pickAndUploadVideo } from "@/helpers/VideoSend";
+import VideoMessagePlayer from "@/components/VideoMessagePlayer";
 
 const ChatScreen = () => {
   usePreventScreenCapture();
@@ -371,6 +420,8 @@ const ChatScreen = () => {
   const [replyingTo, setReplyingTo] = useState<any>(null);
   const [optionsModalVisible, setOptionsModalVisible] = useState(false);
   const [selectedMessage, setSelectedMessage] = useState<any>(null);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploading, setUploading] = useState(false);
 
   const formatTime = (timestamp: any) => {
     if (!timestamp) return "";
@@ -466,12 +517,12 @@ const ChatScreen = () => {
     const message = text.trim(); // Save message before clearing
 
     setText(""); // Clear input first (for faster UI)
-    const senderName = user?.displayName || "You";
+    const senderName = user?.displayName || "Someone";
     const senderId = user?.uid;
     await addDoc(collection(db, `groups/${id}/messages`), {
       text: message,
       createdAt: serverTimestamp(),
-      sender: user?.displayName || "You",
+      sender: user?.displayName || "Someone",
       senderId: user?.uid,
       seen: false,
       replyTo: replyingTo
@@ -496,6 +547,83 @@ const ChatScreen = () => {
       senderName,
       groupId: String(id),
       messageContent: "New Message incoming",
+    });
+  };
+
+  const pickImage = async () => {
+    setUploading(true);
+    let progress = 0;
+    const imageUrl = await pickAndUploadImage((p) => {
+      progress = p;
+      console.log("Upload progress:", progress, "%");
+      // ✅ here you can set state to show progress in UI
+      setUploadProgress(progress);
+    });
+    setUploading(false);
+
+    if (!imageUrl) {
+      console.log("User cancelled image selection");
+      return; // stop execution
+    }
+    const senderName = user?.displayName || "Someone";
+    const senderId = user?.uid;
+    await addDoc(collection(db, `groups/${id}/messages`), {
+      imageUrl: imageUrl,
+      createdAt: serverTimestamp(),
+      sender: senderName,
+      senderId: senderId,
+      seen: false,
+    });
+    const groupDocRef = doc(db, "groups", String(id));
+    await updateDoc(groupDocRef, {
+      lastMessage: {
+        text: "Image from " + senderName,
+        timestamp: serverTimestamp(),
+      },
+    });
+    await notifyGroupMembers({
+      senderId,
+      senderName,
+      groupId: String(id),
+      messageContent: "📷 Sent an image",
+    });
+  };
+  const pickVideo = async () => {
+    setUploading(true);
+    let progress = 0;
+    const videoUrl = await pickAndUploadVideo((p) => {
+      progress = p;
+      console.log("Upload progress:", progress, "%");
+      // ✅ here you can set state to show progress in UI
+      setUploadProgress(progress);
+    });
+    setUploading(false);
+
+    if (!videoUrl) {
+      console.log("User cancelled image selection");
+      return; // stop execution
+    }
+    const senderName = user?.displayName || "Someone";
+    const senderId = user?.uid;
+    await addDoc(collection(db, `groups/${id}/messages`), {
+      videoUrl: videoUrl,
+      createdAt: serverTimestamp(),
+      sender: senderName,
+      senderId: senderId,
+      seen: false,
+    });
+    const groupDocRef = doc(db, "groups", String(id));
+    await updateDoc(groupDocRef, {
+      lastMessage: {
+        text: "Video from " + senderName,
+        timestamp: serverTimestamp(),
+      },
+    });
+    await notifyGroupMembers({
+      senderId,
+      senderName,
+      groupId: String(id),
+      messageContent: "📷 Sent an Video",
     });
   };
   const notifyGroupMembers = async ({
@@ -569,6 +697,7 @@ const ChatScreen = () => {
       console.error("Notification Error:", e);
     }
   };
+
   return (
     <View style={[styles.container, { backgroundColor: BackgroundColor }]}>
       <GroupHeader groupName={groupName} groupId={String(id)} />
@@ -644,14 +773,74 @@ const ChatScreen = () => {
                       </Text>
                     </View>
                   )}
+
+                  {item.imageUrl ? (
+                    <TouchableOpacity
+                      style={styles.snapContainer}
+                      onPress={() => {
+                        // Navigate to full screen image viewer
+                        router.push({
+                          pathname: "/view-image",
+                          params: { imageUrl: item.imageUrl },
+                        });
+                      }}
+                    >
+                      <View style={styles.snapIconWrapper}>
+                        <FontAwesome6
+                          name="camera"
+                          size={24}
+                          color={IconColor}
+                        />
+                      </View>
+                      <Text style={styles.snapText}>Click to view</Text>
+                    </TouchableOpacity>
+                  ) : null}
+
+                  {item.videoUrl ? (
+                    <TouchableOpacity
+                      style={styles.snapContainer}
+                      onPress={() => {
+                        // Navigate to full screen image viewer
+                        router.push({
+                          pathname: "/view-video",
+                          params: { videoUrl: item.videoUrl },
+                        });
+                      }}
+                    >
+                      <View style={styles.snapIconWrapper}>
+                        <FontAwesome6
+                          name="video"
+                          size={24}
+                          color={IconColor}
+                        />
+                      </View>
+                      <Text style={styles.snapText}>Click to play</Text>
+                    </TouchableOpacity>
+                  ) : null}
+                  {/* {item.videoUrl ? (
+                    <VideoMessagePlayer videoUrl={item.videoUrl} />
+                  ) : null} */}
+
                   <Text style={styles.messageText}>{item.text}</Text>
                   <View style={styles.metaContainer}>
                     <Text style={styles.time}>
                       {formatTime(item.createdAt)}
                     </Text>
                     {isCurrentUser && (
-                      <Text style={styles.seen}>
-                        {item.seen ? "✓ Seen" : "✓ Sent"}
+                      <Text style={[styles.seen, {}]}>
+                        {item.seen ? (
+                          <MaterialCommunityIcons
+                            name="check-all"
+                            size={18}
+                            color={IconColor}
+                          />
+                        ) : (
+                          <MaterialCommunityIcons
+                            name="check"
+                            size={18}
+                            color={IconColor}
+                          />
+                        )}
                       </Text>
                     )}
                   </View>
@@ -669,6 +858,53 @@ const ChatScreen = () => {
           }}
         />
       )}
+      {uploading && (
+        <View
+          style={{
+            position: "absolute",
+            bottom: 60,
+            left: 20,
+            right: 20,
+            backgroundColor: "rgba(255,255,255,0.95)",
+            borderRadius: 12,
+            padding: 12,
+            shadowColor: "#000",
+            shadowOpacity: 0.1,
+            shadowRadius: 6,
+            elevation: 5,
+          }}
+        >
+          <Text
+            style={{
+              fontSize: 14,
+              fontWeight: "500",
+              marginBottom: 6,
+              color: "#333",
+              textAlign: "center",
+            }}
+          >
+            Uploading {uploadProgress}%
+          </Text>
+
+          <View
+            style={{
+              height: 8,
+              borderRadius: 8,
+              backgroundColor: "#eee",
+              overflow: "hidden",
+            }}
+          >
+            <View
+              style={{
+                width: `${uploadProgress}%`,
+                height: "100%",
+                backgroundColor: "#007AFF",
+              }}
+            />
+          </View>
+        </View>
+      )}
+
       {replyingTo && (
         <View style={styles.replyPreview}>
           <View style={{ flex: 1 }}>
@@ -744,11 +980,25 @@ const ChatScreen = () => {
           style={styles.input}
           placeholder="Type a message"
           value={text}
+          placeholderTextColor={"#888"}
           onChangeText={setText}
         />
-        <TouchableOpacity style={styles.sendButton} onPress={sendMessage}>
-          <Text style={{ color: "#fff" }}>Send</Text>
-        </TouchableOpacity>
+        {text.trim().length > 0 ? (
+          // 🔹 Show send button if text is not empty
+          <TouchableOpacity style={styles.sendButton} onPress={sendMessage}>
+            <Text style={{ color: "#fff" }}>Send</Text>
+          </TouchableOpacity>
+        ) : (
+          // 🔹 Show image & video icons when no text
+          <View style={styles.mediaButtons}>
+            <TouchableOpacity style={styles.iconButton} onPress={pickImage}>
+              <Ionicons name="image-outline" size={24} color={IconColor} />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.iconButton} onPress={pickVideo}>
+              <Ionicons name="videocam-outline" size={24} color={IconColor} />
+            </TouchableOpacity>
+          </View>
+        )}
       </View>
     </View>
   );

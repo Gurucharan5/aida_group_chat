@@ -16,12 +16,15 @@ import {
   orderBy,
   query,
   Timestamp,
+  getDoc,
+  updateDoc,
 } from "firebase/firestore";
 import { db } from "@/firebaseConfig";
 import { useAuth } from "@/context/AuthContext";
 import RandomChatHeader from "@/components/RandomChatHeader";
 import { useTheme } from "@/context/ThemeContext";
 import { usePreventScreenCapture } from "expo-screen-capture";
+import { sendPushNotification } from "@/helpers/SendNotification";
 
 const ChatRoom = () => {
   usePreventScreenCapture();
@@ -51,7 +54,8 @@ const ChatRoom = () => {
 
   const sendMessage = async () => {
     if (!input.trim()) return;
-
+    const messageText = input.trim();
+    setInput("");
     await addDoc(
       collection(
         db,
@@ -60,13 +64,90 @@ const ChatRoom = () => {
         "messages"
       ),
       {
-        text: input,
+        text: messageText,
         senderId: user?.uid,
         createdAt: Timestamp.now(),
       }
     );
+    // 2. Update parent chat doc with lastMessage + updatedAt
+    const chatRef = doc(db, "randomChats", id as string);
+    await updateDoc(chatRef, {
+      lastMessage: messageText,
+      updatedAt: Timestamp.now(),
+    });
 
-    setInput("");
+    await notifyRandomChatUsers({
+      chatId: id as string,
+      senderId: user?.uid as string,
+      senderName: "Ramdom", // or current user’s name
+      messageContent: messageText, // your message content
+    });
+  };
+  // const notifySpecificUser = async ({
+  //   senderName,
+  //   messageContent,
+  // }: {
+  //   senderName: string;
+  //   messageContent: string;
+  // }) => {
+  //   try {
+  //     const userId = "lGVFHXM3YlRehqPKFjU63Ln8aFl1";
+
+  //     const userSnap = await getDoc(doc(db, "users", userId));
+  //     if (!userSnap.exists()) return;
+
+  //     const expoPushToken = userSnap.data().expoPushToken;
+  //     if (!expoPushToken) return;
+
+  //     await sendPushNotification(
+  //       expoPushToken,
+  //       "New Message from Random Chat",
+  //       `${senderName}: ${messageContent}`
+  //     );
+  //   } catch (e) {
+  //     console.error("Notification Error:", e);
+  //   }
+  // };
+
+  const notifyRandomChatUsers = async ({
+    chatId,
+    senderId,
+    senderName,
+    messageContent,
+  }: {
+    chatId: string;
+    senderId: string;
+    senderName: string;
+    messageContent: string;
+  }) => {
+    try {
+      // 1. Get chat document
+      const chatSnap = await getDoc(doc(db, "randomChats", chatId));
+      if (!chatSnap.exists()) return;
+
+      const chatData = chatSnap.data();
+      const userIds: string[] = chatData.users || [];
+
+      // 2. Loop through users except sender
+      for (const userId of userIds) {
+        if (userId === senderId) continue; // skip sender
+
+        const userSnap = await getDoc(doc(db, "users", userId));
+        if (!userSnap.exists()) continue;
+
+        const expoPushToken = userSnap.data().expoPushToken;
+        if (!expoPushToken) continue;
+
+        // 3. Send notification
+        await sendPushNotification(
+          expoPushToken,
+          "New Message from Random Chat",
+          `${senderName}: ${messageContent}`
+        );
+      }
+    } catch (e) {
+      console.error("Notification Error:", e);
+    }
   };
 
   return (
@@ -115,6 +196,7 @@ const styles = StyleSheet.create({
     padding: 10,
     borderRadius: 8,
     marginVertical: 4,
+    marginHorizontal: 10,
     maxWidth: "75%",
   },
   own: {

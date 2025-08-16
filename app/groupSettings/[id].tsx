@@ -248,7 +248,7 @@ export default function GroupSettings() {
   const { requests, members, loading } = usePendingRequestsWithUserData(
     groupId as string
   );
-  console.log(requests, "requests from hook");
+  // console.log(requests, "requests from hook");
   const [group, setGroup] = useState<any>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [groupName, setGroupName] = useState("");
@@ -258,15 +258,15 @@ export default function GroupSettings() {
   // Fetch group data
   useEffect(() => {
     const fetchGroup = async () => {
-      console.log(groupId, "groupId from params");
+      // console.log(groupId, "groupId from params");
       const groupRef = doc(db, "groups", groupId as string);
       const groupSnap = await getDoc(groupRef);
-      console.log(groupSnap, "groupSnap");
-      console.log("first");
-      console.log(groupSnap.exists(), "groupSnap exists");
+      // console.log(groupSnap, "groupSnap");
+      // console.log("first");
+      // console.log(groupSnap.exists(), "groupSnap exists");
       if (groupSnap.exists()) {
         const data = groupSnap.data();
-        console.log(data, "group data fetched");
+        // console.log(data, "group data fetched");
         setGroup(data);
         setGroupName(data.name);
         setGroupUniqueId(data.uniqueId);
@@ -328,7 +328,7 @@ export default function GroupSettings() {
 
   const rejectRequest = async (userToReject: any) => {
     setProcessLoading(true);
-    console.log(userToReject, "userToReject");
+    // console.log(userToReject, "userToReject");
 
     await deleteDoc(
       doc(db, "groups", groupId as string, "groupRequests", userToReject.id)
@@ -357,12 +357,29 @@ export default function GroupSettings() {
     });
     Alert.alert("Group name updated");
   };
+  const deleteGroup = async () => {
+    if (group.createdBy !== user?.uid) {
+      Alert.alert("Only the group creator can delete the group");
+      return;
+    }
+    try {
+      // Delete the group document
+      await deleteDoc(doc(db, "groups", groupId as string));
 
+      // Optionally: delete all messages in that group
+      // (If messages are in a subcollection)
+      // You'd need a batch delete here.
+
+      alert("Group deleted successfully");
+    } catch (error) {
+      console.error("Error deleting group: ", error);
+    }
+  };
   const kickOutUser = async (userId: string) => {
     setProcessLoading(true);
-    console.log(userId, "userId to kick out");
-    console.log(group.createdBy, "group createdBy");
-    console.log(user?.uid, "current user uid");
+    // console.log(userId, "userId to kick out");
+    // console.log(group.createdBy, "group createdBy");
+    // console.log(user?.uid, "current user uid");
     if (group.createdBy !== user?.uid) {
       Alert.alert("Only admin can kick out users");
       return;
@@ -406,7 +423,7 @@ export default function GroupSettings() {
           }
         }
 
-        console.log("Background deletion complete.");
+        // console.log("Background deletion complete.");
       } catch (error) {
         console.error("Error during background deletion:", error);
       }
@@ -455,6 +472,7 @@ export default function GroupSettings() {
             value={groupName}
             onChangeText={setGroupName}
             style={styles.input}
+            maxLength={15}
           />
           <TouchableOpacity style={styles.button} onPress={saveGroupName}>
             <Text style={styles.buttonText}>Save</Text>
@@ -466,7 +484,12 @@ export default function GroupSettings() {
           >
             <Text style={styles.deleteAllText}>Delete All Messages</Text>
           </TouchableOpacity>
-
+          <TouchableOpacity
+            onPress={deleteGroup}
+            style={styles.deleteAllButton}
+          >
+            <Text style={styles.deleteAllText}>Delete Group</Text>
+          </TouchableOpacity>
           <Text style={styles.subTitle}>Pending Requests</Text>
           {processLoading && (
             <BlurView
@@ -496,7 +519,7 @@ export default function GroupSettings() {
               data={requests}
               keyExtractor={(item, index) => item.uid ?? index.toString()}
               renderItem={({ item }) => {
-                console.log(item, "pending request item");
+                // console.log(item, "pending request item");
                 return (
                   <View style={styles.requestItem}>
                     <Text>{item.user?.name}</Text>
